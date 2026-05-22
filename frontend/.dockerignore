@@ -1,0 +1,14 @@
+node_modules/
+dist/
+dist-ssr/
+
+__pycache__/
+*.py[cod]
+*.db
+*.sqlite
+*.sqlite3
+
+.env
+.vite/
+.vscode/
+npm-debug.log*
