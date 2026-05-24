@@ -722,6 +722,10 @@ def enhance_prompt_api(
             user_prompt=user_prompt,
             temperature=0.5,
             max_tokens=800,
+            metadata={
+                "raw_prompt": payload.prompt,
+                "material_hint": payload.material_hint or "",
+            },
         ),
     )
 
@@ -731,7 +735,11 @@ def enhance_prompt_api(
             detail=result.error or "prompt enhancement failed",
         )
 
-    enhanced = result.content.strip()
+    enhanced = ""
+    if isinstance(result.data, dict):
+        enhanced = str(result.data.get("enhanced_prompt") or "").strip()
+    if not enhanced:
+        enhanced = result.content.strip()
     # Strip markdown fences if the model ignored instructions
     if enhanced.startswith("```"):
         lines = enhanced.splitlines()

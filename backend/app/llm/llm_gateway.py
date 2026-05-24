@@ -471,6 +471,8 @@ class LLMGateway:
                 "removed_terms": metadata.get("interference_terms", []) if metadata else [],
                 "notes": ["已过滤项目名、人名和昵称", "已将主体绑定到产品字段"],
             }
+        if normalized == "seedance_prompt_enhance":
+            return self._mock_seedance_prompt_enhance(metadata or {})
         if normalized == "ai_chat":
             return {
                 "reply": "可以。先把目标账号、人设和产品卖点收紧，再按选题、文案、提示词三个层级推进；如果要继续落地，建议先进入项目档案确认基础信息。",
@@ -481,6 +483,42 @@ class LLMGateway:
             "summary": "mock provider 示例输出",
             "next_step": "请使用 account_package、execution_plan、topics 或 script 模块名测试固定 JSON。",
         }
+
+    def _mock_seedance_prompt_enhance(self, metadata: dict[str, Any]) -> dict[str, Any]:
+        raw_prompt = str(metadata.get("raw_prompt") or "").strip()
+        material_hint = str(metadata.get("material_hint") or "").strip().lower()
+        subject = self._seedance_mock_subject(raw_prompt)
+        material_detail = "translucent emerald jade glow, smooth polish, natural internal texture"
+        if "diamond" in material_hint or "钻" in raw_prompt:
+            material_detail = "crisp facets, clean sparkle, controlled highlights"
+        elif "gold" in material_hint or "金" in raw_prompt:
+            material_detail = "warm gold luster, polished reflections, premium metal texture"
+        elif "pearl" in material_hint or "珍珠" in raw_prompt:
+            material_detail = "soft pearl luster, subtle iridescence, smooth nacre surface"
+
+        return {
+            "enhanced_prompt": (
+                f"{subject} rests on a clean jewelry display in soft natural light, slowly rotating to reveal "
+                f"{material_detail}; camera uses one smooth slow push-in, stable macro perspective, shallow depth "
+                "of field, luxury product cinematography, preserve composition and colors, avoid jitter, warped "
+                "hands, extra text, plastic shine, neon color, and distracting background movement."
+            )
+        }
+
+    def _seedance_mock_subject(self, raw_prompt: str) -> str:
+        if "翡翠手镯" in raw_prompt:
+            return "翡翠手镯"
+        if "戒面" in raw_prompt:
+            return "翡翠戒面"
+        if "吊坠" in raw_prompt or "挂件" in raw_prompt:
+            return "翡翠吊坠"
+        if "钻石" in raw_prompt:
+            return "钻石珠宝"
+        if "黄金" in raw_prompt:
+            return "黄金首饰"
+        if "珍珠" in raw_prompt:
+            return "珍珠首饰"
+        return "珠宝产品"
 
     def _mock_hot_video_search(self, metadata: dict[str, Any] | None = None) -> dict[str, Any]:
         metadata = metadata or {}
