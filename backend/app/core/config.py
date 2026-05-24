@@ -32,6 +32,7 @@ class Settings(BaseSettings):
     auth_cookie_secure: bool = Field(default=False, alias="AUTH_COOKIE_SECURE")
     auth_cookie_samesite: str = Field(default="lax", alias="AUTH_COOKIE_SAMESITE")
     auth_session_ttl_seconds: int = Field(default=604800, alias="AUTH_SESSION_TTL_SECONDS", gt=0)
+    admin_usernames: str = Field(default="chuyu111", alias="ADMIN_USERNAMES")
     oss_access_key_id: str = Field(default="", alias="OSS_ACCESS_KEY_ID")
     oss_access_key_secret: str = Field(default="", alias="OSS_ACCESS_KEY_SECRET")
     oss_endpoint: str = Field(default="", alias="OSS_ENDPOINT")

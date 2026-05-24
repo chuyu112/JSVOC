@@ -11,6 +11,7 @@ from app.api.generation_records import router as generation_records_router
 from app.api.generation_tasks import router as generation_tasks_router
 from app.api.hot_videos import router as hot_videos_router
 from app.api.image_generation import router as image_generation_router
+from app.api.llm_channels import router as llm_channels_router
 from app.api.llm_test import router as llm_test_router
 from app.api.projects import router as projects_router
 from app.api.reference_images import router as reference_images_router
@@ -56,6 +57,7 @@ app.include_router(ai_chat_router)
 app.include_router(credits_router)
 app.include_router(projects_router)
 app.include_router(llm_test_router)
+app.include_router(llm_channels_router)
 app.include_router(strategy_bundle_router)
 app.include_router(topics_router)
 app.include_router(scripts_router)

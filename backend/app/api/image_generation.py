@@ -151,9 +151,9 @@ def run_image_generation_task(task_id: int, mode: str, payload_data: dict[str, A
             else ImageGenerateRequest.model_validate(payload_data)
         )
         if mode == "edit":
-            result = image_generation_service.edit_image(payload_model)
+            result = image_generation_service.edit_image(payload_model, db=db)
         else:
-            result = image_generation_service.generate_image(payload_model)
+            result = image_generation_service.generate_image(payload_model, db=db)
 
         if not result.images:
             raise RuntimeError("image provider returned no usable images")
@@ -234,7 +234,7 @@ def generate_image_api(
     credit_cost = credit_service.image_generation_cost(payload.n, mode="generate")
     credit_service.ensure_sufficient_credits(db, current_user.id, credit_cost)
     try:
-        result = image_generation_service.generate_image(payload)
+        result = image_generation_service.generate_image(payload, db=db)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
     except httpx.TimeoutException as exc:
@@ -319,7 +319,7 @@ def edit_image_api(
     credit_cost = credit_service.image_generation_cost(payload.n, mode="edit")
     credit_service.ensure_sufficient_credits(db, current_user.id, credit_cost)
     try:
-        result = image_generation_service.edit_image(payload)
+        result = image_generation_service.edit_image(payload, db=db)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
     except httpx.TimeoutException as exc:

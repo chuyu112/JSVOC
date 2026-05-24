@@ -4,6 +4,16 @@ import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/components/AuthProvider";
+import {
+  activateLLMChannel,
+  createLLMChannel,
+  deleteLLMChannel,
+  listLLMChannels,
+  testLLMChannel,
+  updateLLMChannel,
+  type LLMChannel,
+  type LLMChannelPayload,
+} from "@/lib/api/llmChannels";
 
 const themes = [
   { key: "yang", label: "阳绿", dot: "#5a9b82", desc: "鲜亮明快，生机勃勃" },
@@ -15,12 +25,38 @@ const themes = [
   { key: "black", label: "墨翠", dot: "#b8a060", desc: "黑金相映，低调奢华" },
 ];
 
+const providers = [
+  { value: "mock", label: "Mock" },
+  { value: "openai_compatible", label: "OpenAI Compatible" },
+  { value: "dataeye", label: "DataEye" },
+  { value: "moyu", label: "Moyu" },
+  { value: "anthropic_compatible", label: "Anthropic Compatible" },
+];
+
+const emptyChannelForm: LLMChannelPayload = {
+  name: "",
+  provider: "openai_compatible",
+  base_url: "",
+  api_key: "",
+  model: "",
+  is_active: false,
+};
+
 export default function SettingsPage() {
   const router = useRouter();
   const auth = useAuth();
   const [saved, setSaved] = useState("yang");
   const [current, setCurrent] = useState("yang");
   const [savedFlag, setSavedFlag] = useState(false);
+  const [channels, setChannels] = useState<LLMChannel[]>([]);
+  const [channelForm, setChannelForm] = useState<LLMChannelPayload>(emptyChannelForm);
+  const [editingChannelId, setEditingChannelId] = useState<number | null>(null);
+  const [channelsLoading, setChannelsLoading] = useState(false);
+  const [channelSaving, setChannelSaving] = useState(false);
+  const [channelError, setChannelError] = useState("");
+  const [testMessages, setTestMessages] = useState<Record<number, string>>({});
+  const [testingChannelId, setTestingChannelId] = useState<number | null>(null);
+  const isAdmin = auth.user?.username === "chuyu111";
 
   useEffect(() => {
     const stored = localStorage.getItem("jade-theme");
@@ -31,6 +67,24 @@ export default function SettingsPage() {
     });
     return () => cancelAnimationFrame(frame);
   }, []);
+
+  useEffect(() => {
+    if (!isAdmin) return;
+    void loadChannels();
+  }, [isAdmin]);
+
+  async function loadChannels() {
+    setChannelsLoading(true);
+    setChannelError("");
+    try {
+      const data = await listLLMChannels();
+      setChannels(data);
+    } catch (error) {
+      setChannelError(error instanceof Error ? error.message : "模型渠道加载失败");
+    } finally {
+      setChannelsLoading(false);
+    }
+  }
 
   function select(key: string) {
     setCurrent(key);
@@ -60,6 +114,86 @@ export default function SettingsPage() {
   async function handleLogout() {
     await auth.logout();
     router.push("/login");
+  }
+
+  function resetChannelForm() {
+    setEditingChannelId(null);
+    setChannelForm(emptyChannelForm);
+    setChannelError("");
+  }
+
+  function editChannel(channel: LLMChannel) {
+    setEditingChannelId(channel.id);
+    setChannelForm({
+      name: channel.name,
+      provider: channel.provider,
+      base_url: channel.base_url,
+      api_key: "",
+      model: channel.model,
+      is_active: channel.is_active,
+    });
+    setChannelError("");
+  }
+
+  async function saveChannel() {
+    setChannelSaving(true);
+    setChannelError("");
+    try {
+      if (editingChannelId) {
+        await updateLLMChannel(editingChannelId, channelForm);
+      } else {
+        await createLLMChannel(channelForm);
+      }
+      resetChannelForm();
+      await loadChannels();
+    } catch (error) {
+      setChannelError(error instanceof Error ? error.message : "模型渠道保存失败");
+    } finally {
+      setChannelSaving(false);
+    }
+  }
+
+  async function activateChannel(id: number) {
+    setChannelError("");
+    try {
+      await activateLLMChannel(id);
+      await loadChannels();
+    } catch (error) {
+      setChannelError(error instanceof Error ? error.message : "模型渠道启用失败");
+    }
+  }
+
+  async function runChannelTest(id: number) {
+    setTestingChannelId(id);
+    setChannelError("");
+    try {
+      const result = await testLLMChannel(id);
+      setTestMessages((currentMessages) => ({
+        ...currentMessages,
+        [id]: result.success
+          ? `测试成功：${result.provider} / ${result.model}`
+          : `测试失败：${result.error || result.message}`,
+      }));
+    } catch (error) {
+      setTestMessages((currentMessages) => ({
+        ...currentMessages,
+        [id]: error instanceof Error ? `测试失败：${error.message}` : "测试失败",
+      }));
+    } finally {
+      setTestingChannelId(null);
+    }
+  }
+
+  async function removeChannel(id: number) {
+    if (!window.confirm("确定删除这个模型渠道吗？")) return;
+    setChannelError("");
+    try {
+      await deleteLLMChannel(id);
+      if (editingChannelId === id) resetChannelForm();
+      await loadChannels();
+    } catch (error) {
+      setChannelError(error instanceof Error ? error.message : "模型渠道删除失败");
+    }
   }
 
   return (
@@ -153,6 +287,190 @@ export default function SettingsPage() {
           </button>
         </div>
       </motion.div>
+
+      {isAdmin && (
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1], delay: 0.16 }}
+          className="glass rounded-[1rem] p-6 md:p-8 max-w-[980px] mt-6"
+        >
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-6">
+            <div>
+              <p className="eyebrow">Admin</p>
+              <h2 className="text-[20px] font-[720] text-[#f5f5f5]">模型渠道</h2>
+            </div>
+            <button
+              type="button"
+              onClick={loadChannels}
+              className="metal-btn text-sm w-fit"
+              disabled={channelsLoading}
+            >
+              {channelsLoading ? "刷新中" : "刷新"}
+            </button>
+          </div>
+
+          {channelError && (
+            <div className="mb-4 rounded-[0.5rem] border border-red-400/25 bg-red-500/10 px-3 py-2 text-[13px] text-red-200">
+              {channelError}
+            </div>
+          )}
+
+          <div className="grid grid-cols-1 lg:grid-cols-[1fr_1.2fr] gap-5">
+            <div className="rounded-[0.75rem] border border-[rgba(255,255,255,0.08)] bg-[rgba(255,255,255,0.03)] p-4">
+              <h3 className="text-[15px] font-[680] text-[#f5f5f5] mb-4">
+                {editingChannelId ? "编辑渠道" : "新增渠道"}
+              </h3>
+              <div className="space-y-3">
+                <label className="block">
+                  <span className="block text-[12px] text-[#9ca3af] mb-1">名称</span>
+                  <input
+                    value={channelForm.name}
+                    onChange={(event) => setChannelForm({ ...channelForm, name: event.target.value })}
+                    className="w-full rounded-[0.5rem] border border-[rgba(255,255,255,0.08)] bg-[rgba(0,0,0,0.22)] px-3 py-2 text-sm text-[#f5f5f5] outline-none focus:border-[var(--jade-primary)]"
+                    placeholder="例如：DeepSeek 主渠道"
+                  />
+                </label>
+
+                <label className="block">
+                  <span className="block text-[12px] text-[#9ca3af] mb-1">Provider</span>
+                  <select
+                    value={channelForm.provider}
+                    onChange={(event) => setChannelForm({ ...channelForm, provider: event.target.value })}
+                    className="w-full rounded-[0.5rem] border border-[rgba(255,255,255,0.08)] bg-[#101613] px-3 py-2 text-sm text-[#f5f5f5] outline-none focus:border-[var(--jade-primary)]"
+                  >
+                    {providers.map((item) => (
+                      <option key={item.value} value={item.value}>
+                        {item.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+
+                <label className="block">
+                  <span className="block text-[12px] text-[#9ca3af] mb-1">Base URL</span>
+                  <input
+                    value={channelForm.base_url}
+                    onChange={(event) => setChannelForm({ ...channelForm, base_url: event.target.value })}
+                    className="w-full rounded-[0.5rem] border border-[rgba(255,255,255,0.08)] bg-[rgba(0,0,0,0.22)] px-3 py-2 text-sm text-[#f5f5f5] outline-none focus:border-[var(--jade-primary)]"
+                    placeholder="https://example.com/v1"
+                  />
+                </label>
+
+                <label className="block">
+                  <span className="block text-[12px] text-[#9ca3af] mb-1">API Key</span>
+                  <input
+                    value={channelForm.api_key || ""}
+                    onChange={(event) => setChannelForm({ ...channelForm, api_key: event.target.value })}
+                    className="w-full rounded-[0.5rem] border border-[rgba(255,255,255,0.08)] bg-[rgba(0,0,0,0.22)] px-3 py-2 text-sm text-[#f5f5f5] outline-none focus:border-[var(--jade-primary)]"
+                    placeholder={editingChannelId ? "留空则保留原密钥" : "可留空"}
+                    type="password"
+                    autoComplete="new-password"
+                  />
+                </label>
+
+                <label className="block">
+                  <span className="block text-[12px] text-[#9ca3af] mb-1">模型名</span>
+                  <input
+                    value={channelForm.model}
+                    onChange={(event) => setChannelForm({ ...channelForm, model: event.target.value })}
+                    className="w-full rounded-[0.5rem] border border-[rgba(255,255,255,0.08)] bg-[rgba(0,0,0,0.22)] px-3 py-2 text-sm text-[#f5f5f5] outline-none focus:border-[var(--jade-primary)]"
+                    placeholder="deepseek-v4-flash"
+                  />
+                </label>
+
+                <label className="flex items-center gap-2 text-[13px] text-[#d0ddd6]">
+                  <input
+                    type="checkbox"
+                    checked={Boolean(channelForm.is_active)}
+                    onChange={(event) => setChannelForm({ ...channelForm, is_active: event.target.checked })}
+                  />
+                  保存后立即启用
+                </label>
+
+                <div className="flex gap-2 pt-2">
+                  <button
+                    type="button"
+                    onClick={saveChannel}
+                    disabled={channelSaving || !channelForm.name.trim() || !channelForm.model.trim()}
+                    className="metal-btn metal-btn-primary text-sm disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    {channelSaving ? "保存中" : "保存渠道"}
+                  </button>
+                  {editingChannelId && (
+                    <button type="button" onClick={resetChannelForm} className="metal-btn text-sm">
+                      取消
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <div className="space-y-3">
+              {channels.length === 0 && (
+                <div className="rounded-[0.75rem] border border-[rgba(255,255,255,0.08)] bg-[rgba(255,255,255,0.03)] p-4 text-[13px] text-[#9ca3af]">
+                  暂无模型渠道。
+                </div>
+              )}
+
+              {channels.map((channel) => (
+                <div
+                  key={channel.id}
+                  className="rounded-[0.75rem] border border-[rgba(255,255,255,0.08)] bg-[rgba(255,255,255,0.03)] p-4"
+                >
+                  <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <h3 className="text-[15px] font-[680] text-[#f5f5f5]">{channel.name}</h3>
+                        {channel.is_active && (
+                          <span className="rounded-full bg-[rgba(127,220,146,0.14)] px-2 py-0.5 text-[11px] text-[#7fdc92]">
+                            当前启用
+                          </span>
+                        )}
+                        {channel.has_api_key && (
+                          <span className="rounded-full bg-[rgba(255,255,255,0.08)] px-2 py-0.5 text-[11px] text-[#d0ddd6]">
+                            Key 已保存
+                          </span>
+                        )}
+                      </div>
+                      <div className="mt-2 space-y-1 text-[12px] text-[#9ca3af]">
+                        <div>Provider：{channel.provider}</div>
+                        <div className="break-all">Base URL：{channel.base_url || "-"}</div>
+                        <div>模型：{channel.model}</div>
+                      </div>
+                      {testMessages[channel.id] && (
+                        <div className="mt-2 text-[12px] text-[#d0ddd6]">{testMessages[channel.id]}</div>
+                      )}
+                    </div>
+
+                    <div className="flex flex-wrap gap-2">
+                      {!channel.is_active && (
+                        <button type="button" onClick={() => activateChannel(channel.id)} className="metal-btn text-xs">
+                          启用
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => runChannelTest(channel.id)}
+                        className="metal-btn text-xs"
+                        disabled={testingChannelId === channel.id}
+                      >
+                        {testingChannelId === channel.id ? "测试中" : "测试"}
+                      </button>
+                      <button type="button" onClick={() => editChannel(channel)} className="metal-btn text-xs">
+                        编辑
+                      </button>
+                      <button type="button" onClick={() => removeChannel(channel.id)} className="metal-btn text-xs">
+                        删除
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </motion.div>
+      )}
     </section>
   );
 }

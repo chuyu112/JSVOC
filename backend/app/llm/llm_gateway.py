@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import Settings, get_settings
 from app.schemas.generation_record import GenerationRecordCreate
+from app.services import llm_channel_service
 from app.services.generation_record_service import create_generation_record
 
 
@@ -67,6 +68,7 @@ class LLMGatewayResponse(BaseModel):
 class LLMGateway:
     def __init__(self, settings: Settings | None = None):
         self.settings = settings or get_settings()
+        self._explicit_settings = settings is not None
 
     def generate(
         self,
@@ -75,6 +77,22 @@ class LLMGateway:
         project_id: int | None = None,
         user_id: int | None = None,
         prompt_version: str | None = "v1",
+    ) -> LLMGatewayResponse:
+        previous_settings = self.settings
+        if not self._explicit_settings:
+            self.settings = llm_channel_service.get_effective_llm_settings(db, get_settings())
+        try:
+            return self._generate_with_current_settings(db, request, project_id, user_id, prompt_version)
+        finally:
+            self.settings = previous_settings
+
+    def _generate_with_current_settings(
+        self,
+        db: Session,
+        request: LLMGatewayRequest,
+        project_id: int | None,
+        user_id: int | None,
+        prompt_version: str | None,
     ) -> LLMGatewayResponse:
         provider = self._normalized_provider()
 

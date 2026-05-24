@@ -7,6 +7,7 @@ from typing import Any
 
 import httpx
 from PIL import Image, ImageOps, UnidentifiedImageError
+from sqlalchemy.orm import Session
 
 from app.core.config import Settings, get_settings
 from app.schemas.image_generation import (
@@ -16,6 +17,7 @@ from app.schemas.image_generation import (
     ImageGenerateRequest,
     ImageGenerateResponse,
 )
+from app.services import llm_channel_service
 
 
 IMAGE_MODEL = "gpt-image-2"
@@ -28,8 +30,12 @@ MIN_PROVIDER_IMAGE_BYTES = 60_000
 logger = logging.getLogger(__name__)
 
 
-def generate_image(payload: ImageGenerateRequest) -> ImageGenerateResponse:
-    settings = get_settings()
+def get_effective_image_settings(db: Session | None = None) -> Settings:
+    return llm_channel_service.get_effective_llm_settings(db, get_settings())
+
+
+def generate_image(payload: ImageGenerateRequest, db: Session | None = None) -> ImageGenerateResponse:
+    settings = get_effective_image_settings(db)
     started_at = time.perf_counter()
     provider = settings.llm_provider.strip().lower().replace("-", "_") or "unknown"
     endpoint = image_generations_url(settings)
@@ -64,11 +70,11 @@ def generate_image(payload: ImageGenerateRequest) -> ImageGenerateResponse:
     )
 
 
-def edit_image(payload: ImageEditRequest) -> ImageGenerateResponse:
+def edit_image(payload: ImageEditRequest, db: Session | None = None) -> ImageGenerateResponse:
     references = image_references_for_payload(payload)
     files = prepare_edit_image_files(references)
 
-    settings = get_settings()
+    settings = get_effective_image_settings(db)
     started_at = time.perf_counter()
     provider = settings.llm_provider.strip().lower().replace("-", "_") or "unknown"
     endpoint = image_edits_url(settings)

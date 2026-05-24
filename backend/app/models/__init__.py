@@ -4,6 +4,7 @@ from app.models.credit import CreditAccount, CreditTransaction
 from app.models.digital_asset import DigitalAsset
 from app.models.generation_record import GenerationRecord
 from app.models.generation_task import GenerationTask
+from app.models.llm_channel import LLMChannel
 from app.models.project import Project
 from app.models.project_reference_image import ProjectReferenceImage
 from app.models.script import Script
@@ -18,6 +19,7 @@ __all__ = [
     "DigitalAsset",
     "GenerationRecord",
     "GenerationTask",
+    "LLMChannel",
     "Project",
     "ProjectReferenceImage",
     "Script",
