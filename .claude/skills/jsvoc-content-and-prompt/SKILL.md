@@ -1,15 +1,15 @@
 ---
-name: jpasp-content-and-prompt
-description: JPASP content generation and prompt engineering skill. Covers video generation (Seedance), image generation, content strategy (topics/scripts/account packages), and prompt enhancement across all modalities. Includes content analysis workflows, preset systems, jewelry aesthetic integration, batch generation policies, and provider selection guidelines.
+name: jsvoc-content-and-prompt
+description: JSVOC content generation and prompt engineering skill. Covers video generation (Seedance), image generation, content strategy (topics/scripts/account packages), and prompt enhancement across all modalities. Includes content analysis workflows, preset systems, jewelry aesthetic integration, batch generation policies, and provider selection guidelines.
 ---
 
-# JPASP Content and Prompt
+# JSVOC Content and Prompt
 
-Content generation and prompt engineering for the JPASP platform. Covers video, image, text, and strategy content production with structured workflows, preset systems, and quality controls.
+Content generation and prompt engineering for the JSVOC platform. Covers video, image, text, and strategy content production with structured workflows, preset systems, and quality controls.
 
 ## Role
 
-You are a **Content Generation Director** for the JPASP platform. You translate rough ideas into production-ready prompts and content plans across video, image, and text modalities. You do not describe outputs in abstract terms — you write executable instructions.
+You are a **Content Generation Director** for the JSVOC platform. You translate rough ideas into production-ready prompts and content plans across video, image, and text modalities. You do not describe outputs in abstract terms — you write executable instructions.
 
 ## When to Use
 
@@ -326,7 +326,7 @@ When using reference images:
 
 ## Preset System
 
-Quick-start combos for common JPASP scenarios:
+Quick-start combos for common JSVOC scenarios:
 
 ### Video Presets
 
@@ -555,7 +555,7 @@ Before returning the enhanced prompt or generating assets, verify ALL of the fol
 
 ## Text Content Writing Guide
 
-Content generation for JPASP is not just about producing text — it is about producing **content that performs**. This section consolidates proven writing methodologies adapted for platform use across scripts, captions, articles, and strategy documents.
+Content generation for JSVOC is not just about producing text — it is about producing **content that performs**. This section consolidates proven writing methodologies adapted for platform use across scripts, captions, articles, and strategy documents.
 
 ### Content Archetypes
 
@@ -663,7 +663,7 @@ Trace the subject from birth to present along the time axis. Cover:
 - **Decision logic**: At key nodes, why A over B? What constraints existed?
 - **Stage划分**: Natural phases (embryonic → growth → maturity/transform), each with core特征 and矛盾.
 
-Target: 6000–15000 characters for long-form research. For JPASP topic briefs: 800–2000 characters.
+Target: 6000–15000 characters for long-form research. For JSVOC topic briefs: 800–2000 characters.
 
 ### Horizontal Analysis (Cross-sectional)
 
@@ -687,7 +687,7 @@ The精华 of the report. Combine vertical and horizontal to answer:
 4. What is the historical root of each current weakness?
 5. Future scenarios: most likely, most dangerous, most optimistic — each with logic.
 
-Target: 1500–3000 characters for long-form. For JPASP: 300–800 characters.
+Target: 1500–3000 characters for long-form. For JSVOC: 300–800 characters.
 
 ### Source Priority
 

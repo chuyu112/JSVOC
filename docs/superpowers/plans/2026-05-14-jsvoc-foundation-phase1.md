@@ -1,4 +1,4 @@
-# JPASP Foundation Phase 1 Implementation Plan
+# JSVOC Foundation Phase 1 Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
@@ -279,8 +279,8 @@ Expected: PASS and new tables appear in migration head.
 - [ ] **Step 1: Add auth settings**
 
 ```python
-    auth_secret_key: str = Field(default="jpasp-dev-secret", alias="AUTH_SECRET_KEY")
-    auth_cookie_name: str = Field(default="jpasp_session", alias="AUTH_COOKIE_NAME")
+    auth_secret_key: str = Field(default="jsvoc-dev-secret", alias="AUTH_SECRET_KEY")
+    auth_cookie_name: str = Field(default="jsvoc_session", alias="AUTH_COOKIE_NAME")
     auth_session_ttl_seconds: int = Field(default=604800, alias="AUTH_SESSION_TTL_SECONDS", gt=0)
 ```
 

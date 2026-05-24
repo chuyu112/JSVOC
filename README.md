@@ -171,7 +171,7 @@ alembic upgrade head
 本地 SQLite 默认使用：
 
 ```env
-DATABASE_URL=sqlite:///./jpasp_dev.db
+DATABASE_URL=sqlite:///./jsvoc_dev.db
 ```
 
 PostgreSQL 示例：

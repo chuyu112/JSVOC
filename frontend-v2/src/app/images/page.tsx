@@ -269,7 +269,7 @@ export default function ImagesEntryPage() {
     if (!url) return;
     const link = document.createElement("a");
     link.href = url;
-    link.download = `jpasp-global-${mode}-${Date.now()}.png`;
+    link.download = `jsvoc-global-${mode}-${Date.now()}.png`;
     link.click();
   }
 

@@ -653,7 +653,7 @@ class ImageGenerationOssApiTest(unittest.TestCase):
             OSS_ACCESS_KEY_ID="test-oss-key",
             OSS_ACCESS_KEY_SECRET="test-oss-secret",
             OSS_ENDPOINT="https://oss-cn-beijing.aliyuncs.com",
-            OSS_BUCKET_NAME="jpasp-assets",
+            OSS_BUCKET_NAME="jsvoc-assets",
             OSS_URL_EXPIRE_SECONDS=600,
         )
 

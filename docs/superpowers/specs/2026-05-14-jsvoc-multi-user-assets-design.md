@@ -1,8 +1,8 @@
-# JPASP Multi-User Assets Design
+# JSVOC Multi-User Assets Design
 
 ## Goal
 
-把 JPASP 从“预留 user_id 但实际无用户系统”的单体 MVP，演进为支持真实用户、项目原地保存、策略覆盖、创作资产沉淀、OSS 媒体存储和双层导航的控制台式产品。
+把 JSVOC 从“预留 user_id 但实际无用户系统”的单体 MVP，演进为支持真实用户、项目原地保存、策略覆盖、创作资产沉淀、OSS 媒体存储和双层导航的控制台式产品。
 
 ## Scope
 

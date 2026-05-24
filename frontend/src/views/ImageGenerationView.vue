@@ -328,7 +328,7 @@ function downloadImage() {
   if (!previewSrc.value) return
   const link = document.createElement('a')
   link.href = previewSrc.value
-  link.download = `jpasp-image-${projectId()}-${Date.now()}.png`
+  link.download = `jsvoc-image-${projectId()}-${Date.now()}.png`
   link.click()
 }
 

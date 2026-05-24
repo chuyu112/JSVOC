@@ -440,7 +440,7 @@ export default function ImagesPage() {
     if (!url) return;
     const link = document.createElement("a");
     link.href = url;
-    link.download = `jpasp-${mode}-${projectId}-${Date.now()}.png`;
+    link.download = `jsvoc-${mode}-${projectId}-${Date.now()}.png`;
     link.click();
   }
 

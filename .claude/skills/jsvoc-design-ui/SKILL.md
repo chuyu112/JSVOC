@@ -1,11 +1,11 @@
 ---
-name: jpasp-design-ui
-description: JPASP project design system and UI/UX guidelines. Consolidates muted postal neo-minimalism, dark glass jade theme, glassmorphism patterns, content-generation-platform UX, and web frontend best practices. Use for all frontend pages, components, styling decisions, and UI reviews in the JPASP codebase.
+name: jsvoc-design-ui
+description: JSVOC project design system and UI/UX guidelines. Consolidates muted postal neo-minimalism, dark glass jade theme, glassmorphism patterns, content-generation-platform UX, and web frontend best practices. Use for all frontend pages, components, styling decisions, and UI reviews in the JSVOC codebase.
 ---
 
-# JPASP Design UI
+# JSVOC Design UI
 
-Design intelligence for the JPASP content generation platform. Covers the project's specific design language, component patterns, UX guidelines, and visual decision frameworks.
+Design intelligence for the JSVOC content generation platform. Covers the project's specific design language, component patterns, UX guidelines, and visual decision frameworks.
 
 ## When to Use
 
@@ -16,7 +16,7 @@ Use this skill whenever the task involves:
 - Making design decisions about cards, forms, navigation, or content display
 - Animating UI elements or page transitions
 
-## JPASP Design Language
+## JSVOC Design Language
 
 The project follows a unified design language. All new work must align with these dimensions.
 
@@ -43,7 +43,7 @@ The project follows a unified design language. All new work must align with thes
 Before coding any interface, answer these four questions:
 
 1. **Purpose**: What problem does this interface solve? Who uses it? (content creators, brand managers, operators)
-2. **Tone**: What is the emotional temperature? JPASP defaults to **calm authority** — confident but not aggressive, clean but not sterile.
+2. **Tone**: What is the emotional temperature? JSVOC defaults to **calm authority** — confident but not aggressive, clean but not sterile.
 3. **Constraints**: Technical requirements (Next.js 16, Tailwind 4, React 19, dark mode only, Chinese + English bilingual support).
 4. **Differentiation**: What makes this page unforgettable? Pick **one** distinctive element: an unusual layout rhythm, a memorable animation moment, or an unexpected spatial composition.
 
@@ -77,7 +77,7 @@ Follow priority 1 → 6. Do not skip lower priorities to chase visual polish.
 
 - `mobile-first`: Design for 375px first, then scale up.
 - `breakpoint-consistency`: Use systematic breakpoints: 375 / 768 / 1024 / 1440.
-- `spacing-scale`: Use 4pt incremental spacing. JPASP common values: `gap-4` (16px), `gap-5` (20px), `gap-6` (24px), `p-5 md:p-6` for card padding.
+- `spacing-scale`: Use 4pt incremental spacing. JSVOC common values: `gap-4` (16px), `gap-5` (20px), `gap-6` (24px), `p-5 md:p-6` for card padding.
 - `container-width`: Consistent max-width on desktop. Use `max-w-7xl` or `max-w-[1440px]` for dashboards.
 - `line-length`: Desktop 60–75 chars per line; mobile 35–60.
 - `z-index-management`: Define layered scale: 0 / 10 / 20 / 40 / 100 / 1000. Do not invent random values.
@@ -86,7 +86,7 @@ Follow priority 1 → 6. Do not skip lower priorities to chase visual polish.
 ### 3. Style Consistency (HIGH)
 
 - `effects-match-style`: Glassmorphism cards use `backdrop-blur-xl`, `bg-white/[0.02–0.05]`, `border-white/[0.06–0.10]`. Do not mix glass with solid flat cards randomly.
-- `dark-mode-pairing`: JPASP is dark-mode only. Design all surfaces for dark backgrounds. Light text on dark: primary `#f5f5f5`, secondary `#d0ddd6`, muted `#9ca3af`, subtle `#7a8a82`.
+- `dark-mode-pairing`: JSVOC is dark-mode only. Design all surfaces for dark backgrounds. Light text on dark: primary `#f5f5f5`, secondary `#d0ddd6`, muted `#9ca3af`, subtle `#7a8a82`.
 - `elevation-consistent`: Cards sit on subtle shadow. Sheets/modals sit higher. Use a consistent scale:
   - Card: `shadow-[0_2px_12px_rgba(0,0,0,0.2)]`
   - Sheet: `shadow-[0_8px_32px_rgba(0,0,0,0.4)]`
@@ -116,7 +116,7 @@ Follow priority 1 → 6. Do not skip lower priorities to chase visual polish.
 ### 5. Animation & Motion (MEDIUM)
 
 - `duration-timing`: 150–300ms for micro-interactions; page transitions ≤400ms.
-- `easing`: Use `ease-out` for entering elements. JPASP custom expo-out: `[0.16, 1, 0.3, 1]` (Framer Motion).
+- `easing`: Use `ease-out` for entering elements. JSVOC custom expo-out: `[0.16, 1, 0.3, 1]` (Framer Motion).
 - `transform-performance`: Animate `transform` and `opacity` only. Never animate `width`, `height`, `top`, `left`.
 - `stagger-sequence`: Stagger list item entrance by 50–100ms per item. Avoid all-at-once.
 - `exit-faster-than-enter`: Exit animations ~60–70% of enter duration.
@@ -138,11 +138,11 @@ Follow priority 1 → 6. Do not skip lower priorities to chase visual polish.
 
 ## Visual System: Style × Layout × Effects
 
-Build any page systematically across three dimensions. This framework is adapted from baoyu-skills' dimensional design system for JPASP's web context.
+Build any page systematically across three dimensions. This framework is adapted from baoyu-skills' dimensional design system for JSVOC's web context.
 
 ### Dimension 1: Style (Visual Aesthetic)
 
-| Style | Keywords | Best For | JPASP Context |
+| Style | Keywords | Best For | JSVOC Context |
 |-------|----------|----------|---------------|
 | **Glass Jade** | `glass`, `backdrop-blur`, `rgba(255,255,255,0.02–0.05)`, `border-white/[0.06]` | Default cards, modals, sidebars | Project default aesthetic |
 | **Solid Layered** | `bg-[#111111]`, `bg-[#1a1a1a]`, subtle border | Dense data, tables, settings | When glass causes readability issues |
@@ -178,7 +178,7 @@ Build any page systematically across three dimensions. This framework is adapted
 
 ## Preset Page Combinations
 
-Quick-start combos for common JPASP pages. Use as starting points, then customize.
+Quick-start combos for common JSVOC pages. Use as starting points, then customize.
 
 | Page Type | Style | Layout | Effects | Notes |
 |-----------|-------|--------|---------|-------|
@@ -193,7 +193,7 @@ Quick-start combos for common JPASP pages. Use as starting points, then customiz
 
 ---
 
-## Auto-Selection for JPASP Pages
+## Auto-Selection for JSVOC Pages
 
 Match page purpose to the recommended combination. First match wins.
 
@@ -303,7 +303,7 @@ className="active:scale-[0.98] transition-transform"
 
 ## Content Display Guidelines
 
-JPASP is a content generation platform. Displaying generated content (videos, images, text, strategies) has specific patterns:
+JSVOC is a content generation platform. Displaying generated content (videos, images, text, strategies) has specific patterns:
 
 ### Displaying Generated Media (Video/Image)
 - Use consistent aspect ratio containers with `aspect-ratio` to prevent layout shift
@@ -357,7 +357,7 @@ Before delivering any UI code, verify:
 - [ ] Icon-only buttons have `aria-label`
 - [ ] `prefers-reduced-motion` respected for animations
 
-### JPASP Specific
+### JSVOC Specific
 - [ ] Design language aligns with muted postal / neo-minimalism / dark glass jade
 - [ ] Card-based layout with layered elements
 - [ ] No high-saturation accent colors introduced

@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 set -e
 
-if [ -d /opt/JPASP ]; then
-  cd /opt/JPASP
+if [ -d /opt/JSVOC ]; then
+  cd /opt/JSVOC
   echo "PWD=$(pwd)"
   echo "BRANCH=$(git branch --show-current 2>/dev/null || true)"
   echo "HEAD=$(git log --oneline -1 2>/dev/null || true)"

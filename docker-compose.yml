@@ -1,16 +1,14 @@
 services:
   postgres:
     image: ${POSTGRES_IMAGE:-postgres:16}
-    container_name: jpasp_postgres
+    container_name: jsvoc_postgres
     restart: always
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-postgres}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
       POSTGRES_DB: ${POSTGRES_DB:-short_video_ops}
-    ports:
-      - "5432:5432"
     volumes:
-      - jpasp_postgres_data:/var/lib/postgresql/data
+      - jsvoc_postgres_data:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres -d short_video_ops"]
       interval: 5s
@@ -23,14 +21,14 @@ services:
       args:
         PYTHON_IMAGE: ${PYTHON_IMAGE:-python:3.11-slim}
         PIP_INDEX_URL: ${PIP_INDEX_URL:-https://mirrors.aliyun.com/pypi/simple/}
-    container_name: jpasp_backend
+    container_name: jsvoc_backend
     restart: always
     env_file:
       - .env
     environment:
       DATABASE_URL: postgresql+psycopg2://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-short_video_ops}
     ports:
-      - "8000:8000"
+      - "127.0.0.1:8000:8000"
     depends_on:
       postgres:
         condition: service_healthy
@@ -43,17 +41,18 @@ services:
       args:
         NODE_IMAGE: ${NODE_IMAGE:-node:20-alpine}
         API_BASE_URL: ${API_BASE_URL:-http://backend:8000}
-    container_name: jpasp_frontend
+    container_name: jsvoc_frontend
     restart: always
     env_file:
       - .env
     environment:
       API_BASE_URL: http://backend:8000
     ports:
-      - "5173:3000"
+      - "127.0.0.1:5173:3000"
     depends_on:
       backend:
         condition: service_healthy
 
 volumes:
-  jpasp_postgres_data:
+  jsvoc_postgres_data:
+    name: jsvoc_postgres_data

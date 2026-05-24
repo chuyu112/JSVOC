@@ -95,7 +95,7 @@ def enhance_image_prompt(
 
 
 def build_system_prompt() -> str:
-    return """你是 JPASP 的生图提示词优化总导演。你的任务不是简单润色，而是分析、增删、纠偏和重写图片生成提示词。
+    return """你是 JSVOC 的生图提示词优化总导演。你的任务不是简单润色，而是分析、增删、纠偏和重写图片生成提示词。
 
 硬规则：
 1. 输出必须是 JSON，不要 Markdown，不要解释。

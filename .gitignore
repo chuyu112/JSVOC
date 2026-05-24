@@ -14,7 +14,7 @@ cookies.txt
 *.sqlite
 *.sqlite3
 
-backend/jpasp_dev.db
+backend/jsvoc_dev.db
 frontend/node_modules/
 frontend/dist/
 frontend/dist-ssr/
@@ -32,8 +32,8 @@ project_check_report.txt
 
 
 backend/*.db
-backend/jpasp_dev.db
-jpasp_dev.db
+backend/jsvoc_dev.db
+jsvoc_dev.db
 
 
 *.pyc

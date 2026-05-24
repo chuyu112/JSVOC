@@ -2,7 +2,7 @@
   "permissions": {
     "allow": [
       "Bash(python *)",
-      "Bash(grep -E \"\\\\.env$|\\\\.db$|jpasp_dev\")",
+      "Bash(grep -E \"\\\\.env$|\\\\.db$|jsvoc_dev\")",
       "Bash(git config *)",
       "Bash(git add *)",
       "Bash(git commit *)",

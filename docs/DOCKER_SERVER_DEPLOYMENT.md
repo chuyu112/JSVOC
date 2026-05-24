@@ -1,10 +1,10 @@
-# JPASP Docker 服务器部署手册
+# JSVOC Docker 服务器部署手册
 
-适用对象：服务器部署同事  
-适用系统：Alibaba Cloud Linux 3.2104 LTS 64 位  
-项目名称：JPASP  
-仓库地址：git@github.com:chuyu111/JPASP.git  
-部署分支：sp8-engineering  
+适用对象：服务器部署同事
+适用系统：Alibaba Cloud Linux 3.2104 LTS 64 位
+项目名称：JSVOC
+仓库地址：git@github.com:chuyu111/JSVOC.git
+部署分支：sp8-engineering
 部署方式：Docker Compose
 
 > 注意：`v0.1.0-mvp` 是功能 MVP 冻结标签，不建议直接用于 Docker 部署。Docker Compose、Nginx、PostgreSQL、openai_compatible 等工程化配置在 `sp8-engineering` 分支。
@@ -55,7 +55,7 @@ VERSION="3.2104 LTS"
 建议项目部署目录：
 
 ```text
-/opt/JPASP
+/opt/JSVOC
 ```
 
 ---
@@ -208,8 +208,8 @@ ls -la /root/.ssh
 通常会看到类似：
 
 ```text
-jpasp_github
-jpasp_github.pub
+jsvoc_github
+jsvoc_github.pub
 ```
 
 注意：
@@ -226,20 +226,20 @@ Git 拉代码时使用的是私钥，不是 `.pub` 文件。
 假设私钥是：
 
 ```text
-/root/.ssh/jpasp_github
+/root/.ssh/jsvoc_github
 ```
 
 执行：
 
 ```bash
 chmod 700 /root/.ssh
-chmod 600 /root/.ssh/jpasp_github
+chmod 600 /root/.ssh/jsvoc_github
 
 cat > /root/.ssh/config <<'EOF'
 Host github.com
     HostName github.com
     User git
-    IdentityFile /root/.ssh/jpasp_github
+    IdentityFile /root/.ssh/jsvoc_github
     IdentitiesOnly yes
     StrictHostKeyChecking accept-new
 EOF
@@ -247,7 +247,7 @@ EOF
 chmod 600 /root/.ssh/config
 ```
 
-如果私钥不是 `jpasp_github`，把配置里的这一行改成实际私钥路径：
+如果私钥不是 `jsvoc_github`，把配置里的这一行改成实际私钥路径：
 
 ```text
 IdentityFile /root/.ssh/你的私钥文件名
@@ -268,7 +268,7 @@ You've successfully authenticated, but GitHub does not provide shell access.
 继续测试仓库访问：
 
 ```bash
-git ls-remote --heads git@github.com:chuyu111/JPASP.git
+git ls-remote --heads git@github.com:chuyu111/JSVOC.git
 ```
 
 如果能看到分支列表，说明服务器已经能访问仓库。
@@ -281,9 +281,9 @@ git ls-remote --heads git@github.com:chuyu111/JPASP.git
 
 ```bash
 cd /opt
-rm -rf JPASP
-git clone -b sp8-engineering git@github.com:chuyu111/JPASP.git JPASP
-cd /opt/JPASP
+rm -rf JSVOC
+git clone -b sp8-engineering git@github.com:chuyu111/JSVOC.git JSVOC
+cd /opt/JSVOC
 ```
 
 确认项目文件：
@@ -318,7 +318,7 @@ sp8-engineering
 如果提示 `sp8-engineering` 分支不存在，说明该分支还没有推送到 GitHub，需要开发同事在本机执行：
 
 ```bash
-cd /d D:\JPASP
+cd /d D:\JSVOC
 git checkout sp8-engineering
 git push -u origin sp8-engineering
 ```
@@ -332,7 +332,7 @@ git push -u origin sp8-engineering
 进入项目目录：
 
 ```bash
-cd /opt/JPASP
+cd /opt/JSVOC
 ```
 
 复制环境变量文件：
@@ -399,7 +399,7 @@ LLM_MODEL=mock-model
 必须在项目目录执行：
 
 ```bash
-cd /opt/JPASP
+cd /opt/JSVOC
 docker compose config
 ```
 
@@ -412,7 +412,7 @@ no configuration file provided
 说明当前目录不对，先执行：
 
 ```bash
-cd /opt/JPASP
+cd /opt/JSVOC
 ```
 
 ---
@@ -422,7 +422,7 @@ cd /opt/JPASP
 首次启动：
 
 ```bash
-cd /opt/JPASP
+cd /opt/JSVOC
 docker compose up -d --build
 ```
 
@@ -635,7 +635,7 @@ script
 编辑 `.env`：
 
 ```bash
-cd /opt/JPASP
+cd /opt/JSVOC
 vi .env
 ```
 
@@ -710,7 +710,7 @@ docker compose up -d --build backend
 进入项目目录：
 
 ```bash
-cd /opt/JPASP
+cd /opt/JSVOC
 ```
 
 查看容器：
@@ -782,7 +782,7 @@ docker compose down -v
 以后代码更新后：
 
 ```bash
-cd /opt/JPASP
+cd /opt/JSVOC
 git fetch origin
 git checkout sp8-engineering
 git pull origin sp8-engineering
@@ -803,7 +803,7 @@ docker compose logs -f backend
 查看提交：
 
 ```bash
-cd /opt/JPASP
+cd /opt/JSVOC
 git log --oneline -10
 ```
 
@@ -833,7 +833,7 @@ docker compose up -d --build
 解决：
 
 ```bash
-cd /opt/JPASP
+cd /opt/JSVOC
 docker compose ps
 ```
 
@@ -844,7 +844,7 @@ docker compose ps
 解决：使用 SSH：
 
 ```bash
-git clone -b sp8-engineering git@github.com:chuyu111/JPASP.git JPASP
+git clone -b sp8-engineering git@github.com:chuyu111/JSVOC.git JSVOC
 ```
 
 ### 17.3 `ssh -T git@github.com` 失败
@@ -963,10 +963,10 @@ LLM_TIMEOUT_SECONDS
 
 ```bash
 cd /opt
-rm -rf JPASP
-git clone -b sp8-engineering git@github.com:chuyu111/JPASP.git JPASP
+rm -rf JSVOC
+git clone -b sp8-engineering git@github.com:chuyu111/JSVOC.git JSVOC
 
-cd /opt/JPASP
+cd /opt/JSVOC
 cp .env.example .env
 
 grep -E "LLM_PROVIDER|DATABASE_URL" .env

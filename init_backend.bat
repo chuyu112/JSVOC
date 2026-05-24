@@ -2,7 +2,7 @@
 chcp 65001 >nul
 title 初始化 FastAPI 后端项目
 
-cd /d D:\JPASP
+cd /d D:\JSVOC
 
 echo.
 echo ================================
@@ -126,7 +126,7 @@ dir backend\app
 
 echo.
 echo 现在可以运行：
-echo cd /d D:\JPASP\backend
+echo cd /d D:\JSVOC\backend
 echo pip install -r requirements.txt
 echo uvicorn app.main:app --reload
 echo.

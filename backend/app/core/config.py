@@ -4,11 +4,11 @@ from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
-DEFAULT_DEV_AUTH_SECRET = "jpasp-dev-secret"
+DEFAULT_DEV_AUTH_SECRET = "jsvoc-dev-secret"
 
 
 class Settings(BaseSettings):
-    database_url: str = Field(default="sqlite:///./jpasp_dev.db", alias="DATABASE_URL")
+    database_url: str = Field(default="sqlite:///./jsvoc_dev.db", alias="DATABASE_URL")
     api_cors_origins: str = Field(
         default="http://localhost:5173,http://127.0.0.1:5173",
         alias="API_CORS_ORIGINS",
@@ -28,7 +28,7 @@ class Settings(BaseSettings):
     opencli_search_timeout_seconds: float = Field(default=30.0, alias="OPENCLI_SEARCH_TIMEOUT_SECONDS", gt=0)
     environment: str = Field(default="development", alias="APP_ENV")
     auth_secret_key: str = Field(default=DEFAULT_DEV_AUTH_SECRET, alias="AUTH_SECRET_KEY")
-    auth_cookie_name: str = Field(default="jpasp_session", alias="AUTH_COOKIE_NAME")
+    auth_cookie_name: str = Field(default="jsvoc_session", alias="AUTH_COOKIE_NAME")
     auth_cookie_secure: bool = Field(default=False, alias="AUTH_COOKIE_SECURE")
     auth_cookie_samesite: str = Field(default="lax", alias="AUTH_COOKIE_SAMESITE")
     auth_session_ttl_seconds: int = Field(default=604800, alias="AUTH_SESSION_TTL_SECONDS", gt=0)

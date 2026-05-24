@@ -1,8 +1,8 @@
 @echo off
 chcp 65001 >nul
-title 检查 D:\JPASP 项目文件
+title 检查 D:\JSVOC 项目文件
 
-set ROOT=D:\JPASP
+set ROOT=D:\JSVOC
 set REPORT=%ROOT%\project_check_report.txt
 
 echo =======================================

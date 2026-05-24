@@ -32,7 +32,7 @@ The current codebase already contains the project profile module and the account
 - SQLAlchemy 2.x models and sessions.
 - Pydantic v2 schemas.
 - Alembic is part of the intended stack, but the current app initializes tables with `Base.metadata.create_all()` during FastAPI lifespan startup.
-- PostgreSQL is the target production database. Local development defaults to SQLite via `DATABASE_URL=sqlite:///./jpasp_dev.db`.
+- PostgreSQL is the target production database. Local development defaults to SQLite via `DATABASE_URL=sqlite:///./jsvoc_dev.db`.
 
 ### AI Layer
 

@@ -9,12 +9,12 @@ def main() -> int:
         sys.stdout.reconfigure(encoding="utf-8", errors="replace")
         sys.stderr.reconfigure(encoding="utf-8", errors="replace")
 
-    host = os.environ["JPASP_DEPLOY_HOST"]
-    user = os.environ["JPASP_DEPLOY_USER"]
-    password = os.environ["JPASP_DEPLOY_PASS"]
+    host = os.environ["JSVOC_DEPLOY_HOST"]
+    user = os.environ["JSVOC_DEPLOY_USER"]
+    password = os.environ["JSVOC_DEPLOY_PASS"]
     remote_command = " && ".join(
         [
-            "cd /opt/JPASP",
+            "cd /opt/JSVOC",
             "git fetch origin",
             "git checkout sp8-engineering",
             "git pull origin sp8-engineering",

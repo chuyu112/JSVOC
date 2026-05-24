@@ -162,7 +162,7 @@ $env:LLM_TIMEOUT_SECONDS="60"
 ### 环境变量清单
 
 ```env
-DATABASE_URL=sqlite:///./jpasp_dev.db
+DATABASE_URL=sqlite:///./jsvoc_dev.db
 API_CORS_ORIGINS=http://localhost:5173,http://127.0.0.1:5173
 LLM_PROVIDER=mock
 LLM_BASE_URL=
@@ -195,7 +195,7 @@ SQLite 本地开发：
 
 ```powershell
 cd backend
-$env:DATABASE_URL="sqlite:///./jpasp_dev.db"
+$env:DATABASE_URL="sqlite:///./jsvoc_dev.db"
 alembic upgrade head
 python -m uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
 ```
@@ -264,7 +264,7 @@ docker compose down -v
 服务器推荐部署路径：
 
 ```text
-/opt/JPASP
+/opt/JSVOC
 ```
 
 当前已验证可用提交：
@@ -325,10 +325,10 @@ ss -ltnp | grep ':8000'
 /opt/jlao/backend/.venv/bin/python -m uvicorn app.main:app --host 127.0.0.1 --port 8000
 ```
 
-确认不是当前 JPASP 服务后，停止旧进程，再重新执行：
+确认不是当前 JSVOC 服务后，停止旧进程，再重新执行：
 
 ```bash
-cd /opt/JPASP
+cd /opt/JSVOC
 docker compose up -d
 ```
 

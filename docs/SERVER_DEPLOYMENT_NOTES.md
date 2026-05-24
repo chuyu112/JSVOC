@@ -11,7 +11,7 @@
 部署路径：
 
 ```text
-/opt/JPASP
+/opt/JSVOC
 ```
 
 ## 已知部署注意事项
@@ -77,7 +77,7 @@
    /opt/jlao/backend/.venv/bin/python -m uvicorn app.main:app --host 127.0.0.1 --port 8000
    ```
 
-   确认不是当前 JPASP 服务后，可以停止该旧进程，再重新启动 Docker Compose。
+   确认不是当前 JSVOC 服务后，可以停止该旧进程，再重新启动 Docker Compose。
 
 5. Alembic 文件必须在 GitHub `sp8-engineering` 中
 
@@ -90,15 +90,15 @@
 
    如果这些文件没有推送到 GitHub，服务器重新 clone 后会在 Docker build 阶段失败。当前提交 `72bce79` 已包含这些文件。
 
-6. 推荐部署路径固定为 `/opt/JPASP`
+6. 推荐部署路径固定为 `/opt/JSVOC`
 
    常用部署命令：
 
    ```bash
    cd /opt
-   rm -rf JPASP
-   git clone -b sp8-engineering git@github.com:chuyu111/JPASP.git JPASP
-   cd /opt/JPASP
+   rm -rf JSVOC
+   git clone -b sp8-engineering git@github.com:chuyu111/JSVOC.git JSVOC
+   cd /opt/JSVOC
    cp .env.example .env
    docker compose up -d --build
    ```
@@ -108,7 +108,7 @@
    如果需要确认服务器代码版本：
 
    ```bash
-   cd /opt/JPASP
+   cd /opt/JSVOC
    git log --oneline -1
    ```
 
@@ -123,7 +123,7 @@
 启动后检查：
 
 ```bash
-cd /opt/JPASP
+cd /opt/JSVOC
 docker compose ps
 curl http://localhost:8000/health
 curl http://localhost:5173/health

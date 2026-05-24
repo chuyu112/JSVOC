@@ -1,4 +1,4 @@
-# JPASP 项目交接记录
+# JSVOC 项目交接记录
 
 **日期**：2026-05-19
 **Git 分支**：`sp8-engineering`
@@ -34,9 +34,9 @@
 
 ### Docker 容器
 ```
-jpasp_backend    Up (healthy)   0.0.0.0:8000->8000
-jpasp_frontend   Up             0.0.0.0:5173->3000    # 基于 docker commit 的应急镜像
-jpasp_postgres   Up (healthy)   0.0.0.0:5432->5432
+jsvoc_backend    Up (healthy)   0.0.0.0:8000->8000
+jsvoc_frontend   Up             0.0.0.0:5173->3000    # 基于 docker commit 的应急镜像
+jsvoc_postgres   Up (healthy)   0.0.0.0:5432->5432
 ```
 
 ### 资源占用
@@ -92,16 +92,16 @@ jpasp_postgres   Up (healthy)   0.0.0.0:5432->5432
 
 ### 服务器访问
 ```bash
-ssh jpasp-prod
-# 密钥: ~/.ssh/jpasp_server (ed25519)
+ssh jsvoc-prod
+# 密钥: ~/.ssh/jsvoc_server (ed25519)
 # 密码认证已禁用
 ```
 
 ### 项目路径
 ```bash
-/opt/JPASP
+/opt/JSVOC
 # docker compose up -d   # 启动全部服务
-# 域名: jpasp.szkakayiduo.com
+# 域名: jsvoc.szkakayiduo.com
 ```
 
 ### 前端应急部署命令（当前在用）
@@ -109,22 +109,22 @@ ssh jpasp-prod
 # 1. 本地 Windows 构建
 npm run build
 tar -czf next-build.tar.gz .next/
-scp next-build.tar.gz jpasp-prod:/tmp/
+scp next-build.tar.gz jsvoc-prod:/tmp/
 
 # 2. 服务器端注入
 tar -xzf /tmp/next-build.tar.gz -C /tmp
-docker cp /tmp/.next/. jpasp_frontend:/app/.next/
-docker commit jpasp_frontend jpasp-frontend-v2:new-tag
-docker rm -f jpasp_frontend
-docker run -d --name jpasp_frontend --restart=always \
-  -p 5173:3000 --env-file /opt/JPASP/.env \
+docker cp /tmp/.next/. jsvoc_frontend:/app/.next/
+docker commit jsvoc_frontend jsvoc-frontend-v2:new-tag
+docker rm -f jsvoc_frontend
+docker run -d --name jsvoc_frontend --restart=always \
+  -p 5173:3000 --env-file /opt/JSVOC/.env \
   -e API_BASE_URL=http://backend:8000 \
-  jpasp-frontend-v2:new-tag
+  jsvoc-frontend-v2:new-tag
 ```
 
 ---
 
-## 六、已清理的非 JPASP 项目
+## 六、已清理的非 JSVOC 项目
 
 以下项目的服务和目录已被关闭/删除：
 - **JLAO** (`/opt/jlao/`) — 服务已禁用并删除

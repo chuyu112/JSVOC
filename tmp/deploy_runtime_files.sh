@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-cd /opt/JPASP
+cd /opt/JSVOC
 
-backup_dir="/tmp/jpasp-deploy-backup-$(date +%Y%m%d%H%M%S)"
+backup_dir="/tmp/jsvoc-deploy-backup-$(date +%Y%m%d%H%M%S)"
 mkdir -p "$backup_dir"
 
 for path in \
