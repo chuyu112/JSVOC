@@ -38,6 +38,7 @@ class Settings(BaseSettings):
     oss_endpoint: str = Field(default="", alias="OSS_ENDPOINT")
     oss_bucket_name: str = Field(default="", alias="OSS_BUCKET_NAME")
     oss_url_expire_seconds: int = Field(default=600, alias="OSS_URL_EXPIRE_SECONDS", gt=0)
+    image_generation_model: str = Field(default="gpt-image-2", alias="IMAGE_GENERATION_MODEL")
     account_package_model: str = Field(default="deepseek-v4-flash", alias="ACCOUNT_PACKAGE_MODEL")
     execution_plan_model: str = Field(default="deepseek-v4-flash", alias="EXECUTION_PLAN_MODEL")
     deepseek_topics_model: str = Field(default="deepseek-v4-flash", alias="DEEPSEEK_TOPICS_MODEL")

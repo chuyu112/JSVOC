@@ -3,6 +3,7 @@ import { api } from "./client";
 export interface LLMChannel {
   id: number;
   name: string;
+  purpose: string;
   provider: string;
   base_url: string;
   model: string;
@@ -14,6 +15,7 @@ export interface LLMChannel {
 
 export interface LLMChannelPayload {
   name: string;
+  purpose: string;
   provider: string;
   base_url: string;
   api_key?: string;

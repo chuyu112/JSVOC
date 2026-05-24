@@ -76,6 +76,7 @@ class LLMChannelsApiTest(unittest.TestCase):
         self.assertEqual(create_response.status_code, 201)
         created = create_response.json()["data"]
         self.assertEqual(created["name"], "Primary LLM")
+        self.assertEqual(created["purpose"], "chat")
         self.assertTrue(created["is_active"])
         self.assertTrue(created["has_api_key"])
         self.assertNotIn("api_key", created)
@@ -122,6 +123,64 @@ class LLMChannelsApiTest(unittest.TestCase):
         delete_response = self.client.delete(f"/api/admin/llm-channels/{second_id}")
         self.assertEqual(delete_response.status_code, 200)
 
+    def test_active_channels_are_isolated_by_purpose(self) -> None:
+        self.register("chuyu111")
+
+        chat_response = self.client.post(
+            "/api/admin/llm-channels",
+            json={
+                "name": "Chat",
+                "purpose": "chat",
+                "provider": "openai_compatible",
+                "base_url": "https://chat.example.com/v1",
+                "api_key": "chat-secret",
+                "model": "chat-model",
+                "is_active": True,
+            },
+        )
+        self.assertEqual(chat_response.status_code, 201)
+        chat_id = chat_response.json()["data"]["id"]
+
+        image_response = self.client.post(
+            "/api/admin/llm-channels",
+            json={
+                "name": "Image",
+                "purpose": "image",
+                "provider": "openai_compatible",
+                "base_url": "https://image.example.com/v1",
+                "api_key": "image-secret",
+                "model": "image-model",
+                "is_active": True,
+            },
+        )
+        self.assertEqual(image_response.status_code, 201)
+        image_id = image_response.json()["data"]["id"]
+
+        second_chat_response = self.client.post(
+            "/api/admin/llm-channels",
+            json={
+                "name": "Chat 2",
+                "purpose": "chat",
+                "provider": "mock",
+                "base_url": "",
+                "api_key": "",
+                "model": "mock-model",
+                "is_active": True,
+            },
+        )
+        self.assertEqual(second_chat_response.status_code, 201)
+        second_chat_id = second_chat_response.json()["data"]["id"]
+
+        channels = self.client.get("/api/admin/llm-channels").json()["data"]
+        active_by_id = {item["id"]: item["is_active"] for item in channels}
+        purpose_by_id = {item["id"]: item["purpose"] for item in channels}
+
+        self.assertFalse(active_by_id[chat_id])
+        self.assertTrue(active_by_id[image_id])
+        self.assertTrue(active_by_id[second_chat_id])
+        self.assertEqual(purpose_by_id[image_id], "image")
+        self.assertEqual(purpose_by_id[second_chat_id], "chat")
+
     def test_active_channel_overrides_env_settings_for_gateway_and_preserves_secret(self) -> None:
         self.register("chuyu111")
         create_response = self.client.post(
@@ -165,6 +224,80 @@ class LLMChannelsApiTest(unittest.TestCase):
         self.assertEqual(call_args[0], "https://runtime.example.com/v1/chat/completions")
         self.assertEqual(call_kwargs["headers"]["Authorization"], "Bearer runtime-secret")
         self.assertEqual(call_kwargs["json"]["model"], "runtime-model")
+
+    def test_image_channel_test_uses_image_generation_endpoint(self) -> None:
+        self.register("chuyu111")
+        create_response = self.client.post(
+            "/api/admin/llm-channels",
+            json={
+                "name": "Image Runtime",
+                "purpose": "image",
+                "provider": "openai_compatible",
+                "base_url": "https://image.example.com/v1",
+                "api_key": "image-secret",
+                "model": "gpt-image-2",
+                "is_active": True,
+            },
+        )
+        self.assertEqual(create_response.status_code, 201)
+        channel_id = create_response.json()["data"]["id"]
+
+        fake_response = Mock()
+        fake_response.status_code = 200
+        fake_response.raise_for_status.return_value = None
+        fake_response.json.return_value = {
+            "model": "gpt-image-2",
+            "data": [{"b64_json": "aW1hZ2U="}],
+            "usage": {"total_tokens": 1},
+        }
+
+        with (
+            patch("app.llm.llm_gateway._post_json", side_effect=AssertionError("chat test should not run")),
+            patch("app.services.image_generation_service.httpx.post", return_value=fake_response) as post_image,
+        ):
+            test_response = self.client.post(f"/api/admin/llm-channels/{channel_id}/test")
+
+        self.assertEqual(test_response.status_code, 200)
+        payload = test_response.json()["data"]
+        self.assertTrue(payload["success"])
+        self.assertEqual(payload["provider"], "openai_compatible")
+        self.assertEqual(payload["model"], "gpt-image-2")
+        call_kwargs = post_image.call_args.kwargs
+        self.assertEqual(post_image.call_args.args[0], "https://image.example.com/v1/images/generations")
+        self.assertEqual(call_kwargs["headers"]["Authorization"], "Bearer image-secret")
+        self.assertEqual(call_kwargs["json"]["model"], "gpt-image-2")
+
+    def test_video_channel_test_checks_config_without_submitting_task(self) -> None:
+        self.register("chuyu111")
+        create_response = self.client.post(
+            "/api/admin/llm-channels",
+            json={
+                "name": "Video Runtime",
+                "purpose": "video",
+                "provider": "seedance",
+                "base_url": "https://ark.example.com",
+                "api_key": "video-secret",
+                "model": "seedance-2.0",
+                "is_active": True,
+            },
+        )
+        self.assertEqual(create_response.status_code, 201)
+        channel_id = create_response.json()["data"]["id"]
+
+        with (
+            patch("app.llm.llm_gateway._post_json", side_effect=AssertionError("chat test should not run")),
+            patch(
+                "app.services.video_generation_service.post_video_request_with_retry",
+                side_effect=AssertionError("video test should not submit a task"),
+            ),
+        ):
+            test_response = self.client.post(f"/api/admin/llm-channels/{channel_id}/test")
+
+        self.assertEqual(test_response.status_code, 200)
+        payload = test_response.json()["data"]
+        self.assertTrue(payload["success"])
+        self.assertEqual(payload["provider"], "seedance")
+        self.assertEqual(payload["model"], "doubao-seedance-2-0-260128")
 
 
 if __name__ == "__main__":

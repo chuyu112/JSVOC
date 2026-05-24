@@ -4,8 +4,10 @@ from collections.abc import Callable
 from typing import Any
 
 import httpx
+from sqlalchemy.orm import Session
 
 from app.core.config import Settings, get_settings
+from app.services import llm_channel_service
 from app.services.video_model_catalog import resolve_video_model_endpoint
 
 logger = logging.getLogger(__name__)
@@ -27,8 +29,9 @@ def generate_video(
     reference_videos: list[str] | None = None,
     reference_audios: list[str] | None = None,
     on_provider_task_created: Callable[[dict[str, Any]], None] | None = None,
+    db: Session | None = None,
 ) -> dict[str, Any]:
-    settings = get_settings()
+    settings = llm_channel_service.get_effective_video_settings(db, get_settings()) if db is not None else get_settings()
     started_at = time.perf_counter()
     base_url = video_base_url(settings)
     api_key = video_api_key(settings)
@@ -168,8 +171,8 @@ def poll_video_task(
     raise TimeoutError("video generation task polling timed out")
 
 
-def get_video_task_result(task_id: str) -> dict[str, Any]:
-    settings = get_settings()
+def get_video_task_result(task_id: str, db: Session | None = None) -> dict[str, Any]:
+    settings = llm_channel_service.get_effective_video_settings(db, get_settings()) if db is not None else get_settings()
     base_url = video_base_url(settings)
     api_key = video_api_key(settings)
     if not api_key:

@@ -80,7 +80,11 @@ class LLMGateway:
     ) -> LLMGatewayResponse:
         previous_settings = self.settings
         if not self._explicit_settings:
-            self.settings = llm_channel_service.get_effective_llm_settings(db, get_settings())
+            self.settings = llm_channel_service.get_effective_llm_settings(
+                db,
+                get_settings(),
+                purpose=llm_channel_service.CHANNEL_PURPOSE_CHAT,
+            )
         try:
             return self._generate_with_current_settings(db, request, project_id, user_id, prompt_version)
         finally:

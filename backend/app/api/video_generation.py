@@ -441,6 +441,7 @@ def run_video_generation_task(
             reference_videos=reference_videos,
             reference_audios=reference_audios,
             on_provider_task_created=persist_provider_task,
+            db=db,
         )
         result.setdefault("prompt", prompt)
         if not result.get("video_url"):
@@ -482,7 +483,7 @@ def recover_interrupted_video_generation_tasks() -> int:
                 continue
 
             try:
-                provider_result = video_generation_service.get_video_task_result(str(provider_task_id))
+                provider_result = video_generation_service.get_video_task_result(str(provider_task_id), db=db)
                 status_value = str(provider_result.get("status") or "").lower()
                 merged_result = {
                     **result_data,

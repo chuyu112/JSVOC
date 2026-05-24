@@ -31,10 +31,18 @@ const providers = [
   { value: "dataeye", label: "DataEye" },
   { value: "moyu", label: "Moyu" },
   { value: "anthropic_compatible", label: "Anthropic Compatible" },
+  { value: "seedance", label: "Seedance / Ark" },
+];
+
+const channelPurposes = [
+  { value: "chat", label: "聊天" },
+  { value: "image", label: "生图" },
+  { value: "video", label: "生视频" },
 ];
 
 const emptyChannelForm: LLMChannelPayload = {
   name: "",
+  purpose: "chat",
   provider: "openai_compatible",
   base_url: "",
   api_key: "",
@@ -126,6 +134,7 @@ export default function SettingsPage() {
     setEditingChannelId(channel.id);
     setChannelForm({
       name: channel.name,
+      purpose: channel.purpose,
       provider: channel.provider,
       base_url: channel.base_url,
       api_key: "",
@@ -133,6 +142,25 @@ export default function SettingsPage() {
       is_active: channel.is_active,
     });
     setChannelError("");
+  }
+
+  function changeChannelPurpose(purpose: string) {
+    const defaults: Record<string, Pick<LLMChannelPayload, "provider" | "model">> = {
+      chat: { provider: "openai_compatible", model: "" },
+      image: { provider: "openai_compatible", model: "gpt-image-2" },
+      video: { provider: "seedance", model: "seedance-2.0" },
+    };
+    const next = defaults[purpose] || defaults.chat;
+    setChannelForm({
+      ...channelForm,
+      purpose,
+      provider: next.provider,
+      model: channelForm.model || next.model,
+    });
+  }
+
+  function purposeLabel(value: string) {
+    return channelPurposes.find((item) => item.value === value)?.label || value;
   }
 
   async function saveChannel() {
@@ -333,6 +361,21 @@ export default function SettingsPage() {
                 </label>
 
                 <label className="block">
+                  <span className="block text-[12px] text-[#9ca3af] mb-1">用途</span>
+                  <select
+                    value={channelForm.purpose}
+                    onChange={(event) => changeChannelPurpose(event.target.value)}
+                    className="w-full rounded-[0.5rem] border border-[rgba(255,255,255,0.08)] bg-[#101613] px-3 py-2 text-sm text-[#f5f5f5] outline-none focus:border-[var(--jade-primary)]"
+                  >
+                    {channelPurposes.map((item) => (
+                      <option key={item.value} value={item.value}>
+                        {item.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+
+                <label className="block">
                   <span className="block text-[12px] text-[#9ca3af] mb-1">Provider</span>
                   <select
                     value={channelForm.provider}
@@ -422,6 +465,9 @@ export default function SettingsPage() {
                     <div className="min-w-0">
                       <div className="flex flex-wrap items-center gap-2">
                         <h3 className="text-[15px] font-[680] text-[#f5f5f5]">{channel.name}</h3>
+                        <span className="rounded-full bg-[rgba(255,255,255,0.08)] px-2 py-0.5 text-[11px] text-[#d0ddd6]">
+                          {purposeLabel(channel.purpose)}
+                        </span>
                         {channel.is_active && (
                           <span className="rounded-full bg-[rgba(127,220,146,0.14)] px-2 py-0.5 text-[11px] text-[#7fdc92]">
                             当前启用
@@ -434,6 +480,7 @@ export default function SettingsPage() {
                         )}
                       </div>
                       <div className="mt-2 space-y-1 text-[12px] text-[#9ca3af]">
+                        <div>用途：{purposeLabel(channel.purpose)}</div>
                         <div>Provider：{channel.provider}</div>
                         <div className="break-all">Base URL：{channel.base_url || "-"}</div>
                         <div>模型：{channel.model}</div>

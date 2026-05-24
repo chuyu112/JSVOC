@@ -131,3 +131,21 @@
 - version
 - is_active
 - created_at
+
+## llm_channels
+
+Stores admin-managed provider channels.
+
+Fields:
+- id
+- name
+- purpose (`chat`, `image`, or `video`)
+- provider
+- base_url
+- api_key
+- model
+- is_active
+- created_at
+- updated_at
+
+Only one channel should be active per purpose.

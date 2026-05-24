@@ -5,8 +5,10 @@ from app.api.dependencies import get_current_admin_user
 from app.db.session import get_db
 from app.llm.llm_gateway import LLMGateway, LLMGatewayRequest
 from app.models.user import User
+from app.schemas.image_generation import ImageGenerateRequest
 from app.schemas.llm_channel import LLMChannelCreate, LLMChannelTestResult, LLMChannelUpdate
-from app.services import llm_channel_service
+from app.services import image_generation_service, llm_channel_service, video_generation_service
+from app.services.video_model_catalog import resolve_video_model_endpoint
 
 
 router = APIRouter(prefix="/api/admin/llm-channels", tags=["admin-llm-channels"])
@@ -81,6 +83,13 @@ def test_llm_channel(
     admin_user: User = Depends(get_current_admin_user),
 ) -> dict[str, object]:
     channel = llm_channel_service.get_channel_or_404(db, channel_id)
+    if channel.purpose == llm_channel_service.CHANNEL_PURPOSE_IMAGE:
+        data = test_image_channel(channel)
+        return success_response(data.model_dump(mode="json"), data.message)
+    if channel.purpose == llm_channel_service.CHANNEL_PURPOSE_VIDEO:
+        data = test_video_channel(channel)
+        return success_response(data.model_dump(mode="json"), data.message)
+
     settings = llm_channel_service.settings_for_channel(channel)
     gateway = LLMGateway(settings=settings)
     result = gateway.generate(
@@ -105,3 +114,61 @@ def test_llm_channel(
         error=result.error,
     )
     return success_response(data.model_dump(mode="json"), message)
+
+
+def test_image_channel(channel) -> LLMChannelTestResult:
+    settings = llm_channel_service.image_settings_for_channel(channel)
+    try:
+        result = image_generation_service.generate_image(
+            ImageGenerateRequest(
+                prompt="A simple product test image on a plain white background.",
+                n=1,
+                size="1024x1024",
+                quality="low",
+            ),
+            settings=settings,
+        )
+    except Exception as exc:  # noqa: BLE001 - admin test returns structured failure.
+        return LLMChannelTestResult(
+            success=False,
+            provider=channel.provider,
+            model=channel.model,
+            message=str(exc),
+            error=str(exc),
+        )
+
+    success = bool(result.images)
+    message = "image channel test succeeded" if success else "image channel returned no images"
+    return LLMChannelTestResult(
+        success=success,
+        provider=result.provider,
+        model=result.model,
+        message=message,
+        latency_ms=result.latency_ms,
+        error=None if success else message,
+    )
+
+
+def test_video_channel(channel) -> LLMChannelTestResult:
+    settings = llm_channel_service.video_settings_for_channel(channel)
+    try:
+        base_url = video_generation_service.video_base_url(settings)
+        api_key = video_generation_service.video_api_key(settings)
+        if not api_key:
+            raise ValueError("VIDEO_GENERATION_API_KEY or ARK_API_KEY is required for video generation")
+        model = resolve_video_model_endpoint(channel.model, settings)
+    except Exception as exc:  # noqa: BLE001 - admin test returns structured failure.
+        return LLMChannelTestResult(
+            success=False,
+            provider=channel.provider,
+            model=channel.model,
+            message=str(exc),
+            error=str(exc),
+        )
+
+    return LLMChannelTestResult(
+        success=True,
+        provider=channel.provider,
+        model=model,
+        message=f"video channel config check succeeded: {base_url}",
+    )

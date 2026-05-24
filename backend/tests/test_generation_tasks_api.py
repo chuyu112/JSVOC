@@ -550,8 +550,9 @@ class GenerationTasksApiTest(unittest.TestCase):
             db.commit()
             task_id = task.id
 
-        def fake_get_video_task_result(task_id):
+        def fake_get_video_task_result(task_id, db=None):
             self.assertEqual(task_id, "cgt-test-1")
+            self.assertIsNotNone(db)
             return {
                 "status": "succeeded",
                 "video_url": "https://provider.example.test/video.mp4",

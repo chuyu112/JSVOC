@@ -15,6 +15,16 @@
 - The backend uses OSS for generated images, generated videos, and uploaded reference media. Required RAM permissions include object upload, download/signing support, and delete for verification/cleanup, for example `oss:PutObject`, `oss:GetObject`, and `oss:DeleteObject` on bucket `jsvoc2`.
 - If the bucket is recreated or moved to another region, update `OSS_ENDPOINT` to the endpoint shown in the OSS console for that bucket before restarting `jsvoc_backend`.
 
+## Production AI Channels
+
+- Admin channel settings live at `/settings` for username `chuyu111`.
+- LLM channels are separated by `purpose`: `chat`, `image`, and `video`.
+- Only one channel can be active per purpose. Activating an image channel does not change the active chat or video channel.
+- `chat` channels route all `LLMGateway` text calls, including AI chat, strategy/content generation, and prompt enhancement.
+- `image` channels route `/api/creation/images/generate` and `/api/creation/images/edit`; use image model names such as `gpt-image-2`.
+- `video` channels route Seedance/Ark video generation. Video channel tests only verify configuration because real video submission is expensive.
+- Image channel tests call the real image generation provider with a minimal prompt and can consume provider quota.
+
 Behavioral guidelines to reduce common LLM coding mistakes. Merge with project-specific instructions as needed.
 
 **Tradeoff:** These guidelines bias toward caution over speed. For trivial tasks, use judgment.

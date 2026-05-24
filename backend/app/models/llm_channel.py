@@ -12,6 +12,7 @@ class LLMChannel(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
     name: Mapped[str] = mapped_column(String(120), nullable=False)
+    purpose: Mapped[str] = mapped_column(String(40), nullable=False, default="chat", index=True)
     provider: Mapped[str] = mapped_column(String(60), nullable=False, index=True)
     base_url: Mapped[str] = mapped_column(Text, nullable=False, default="")
     api_key: Mapped[str] = mapped_column(Text, nullable=False, default="")

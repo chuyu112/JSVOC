@@ -31,11 +31,20 @@ logger = logging.getLogger(__name__)
 
 
 def get_effective_image_settings(db: Session | None = None) -> Settings:
-    return llm_channel_service.get_effective_llm_settings(db, get_settings())
+    if db is None:
+        return get_settings()
+    return llm_channel_service.get_effective_image_settings(
+        db,
+        get_settings(),
+    )
 
 
-def generate_image(payload: ImageGenerateRequest, db: Session | None = None) -> ImageGenerateResponse:
-    settings = get_effective_image_settings(db)
+def generate_image(
+    payload: ImageGenerateRequest,
+    db: Session | None = None,
+    settings: Settings | None = None,
+) -> ImageGenerateResponse:
+    settings = settings or get_effective_image_settings(db)
     started_at = time.perf_counter()
     provider = settings.llm_provider.strip().lower().replace("-", "_") or "unknown"
     endpoint = image_generations_url(settings)
@@ -44,7 +53,7 @@ def generate_image(payload: ImageGenerateRequest, db: Session | None = None) -> 
         headers["Authorization"] = f"Bearer {settings.llm_api_key}"
 
     request_body: dict[str, Any] = {
-        "model": IMAGE_MODEL,
+        "model": image_model(settings),
         "prompt": payload.prompt,
         "n": payload.n,
         "size": payload.size,
@@ -83,7 +92,7 @@ def edit_image(payload: ImageEditRequest, db: Session | None = None) -> ImageGen
         headers["Authorization"] = f"Bearer {settings.llm_api_key}"
 
     data = {
-        "model": IMAGE_MODEL,
+        "model": image_model(settings),
         "prompt": build_image_edit_prompt(payload),
         "n": str(payload.n),
         "size": payload.size,
@@ -121,6 +130,10 @@ def image_generations_url(settings: Settings) -> str:
     if base_url.endswith("/v1"):
         return f"{base_url}/images/generations"
     return f"{base_url}/v1/images/generations"
+
+
+def image_model(settings: Settings) -> str:
+    return settings.image_generation_model.strip() or IMAGE_MODEL
 
 
 def image_edits_url(settings: Settings) -> str:
