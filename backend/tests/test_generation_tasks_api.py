@@ -124,6 +124,53 @@ class GenerationTasksApiTest(unittest.TestCase):
 
         self.assertEqual(response.status_code, 404)
 
+    def test_list_generation_tasks_returns_recent_tasks_for_current_user_with_errors(self) -> None:
+        with self.SessionLocal() as db:
+            own_failed = GenerationTask(
+                task_type="image_edit",
+                status="failed",
+                user_id=1,
+                project_id=None,
+                input_data={"prompt": "jade pendant"},
+                error_message="image generation provider failed 400: moderation_blocked",
+                created_at=utcnow_naive() - timedelta(minutes=1),
+                updated_at=utcnow_naive() - timedelta(minutes=1),
+            )
+            own_success = GenerationTask(
+                task_type="video_generate",
+                status="succeeded",
+                user_id=1,
+                project_id=7,
+                input_data={"prompt": "jade video"},
+                result_data={"video_url": "https://example.test/video.mp4"},
+                created_at=utcnow_naive() - timedelta(minutes=2),
+                updated_at=utcnow_naive() - timedelta(minutes=2),
+            )
+            other_user_task = GenerationTask(
+                task_type="image_generate",
+                status="failed",
+                user_id=999,
+                project_id=None,
+                input_data={"prompt": "private"},
+                error_message="should not leak",
+                created_at=utcnow_naive(),
+                updated_at=utcnow_naive(),
+            )
+            db.add_all([own_failed, own_success, other_user_task])
+            db.commit()
+
+        response = self.client.get("/api/generation-tasks?limit=5")
+
+        self.assertEqual(response.status_code, 200)
+        body = response.json()
+        self.assertTrue(body["success"])
+        tasks = body["data"]
+        self.assertEqual([item["task_type"] for item in tasks], ["image_edit", "video_generate"])
+        self.assertEqual(tasks[0]["status"], "failed")
+        self.assertIn("moderation_blocked", tasks[0]["error_message"])
+        self.assertEqual(tasks[1]["status"], "succeeded")
+        self.assertEqual(tasks[1]["result_data"]["video_url"], "https://example.test/video.mp4")
+
     def test_generate_image_async_creates_task_and_schedules_background_work(self) -> None:
         scheduled = []
         project_id = self.create_project(self.client)

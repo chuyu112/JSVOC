@@ -42,6 +42,22 @@ def get_generation_task_for_user(db: Session, task_id: int, user_id: int) -> Gen
     return task
 
 
+def list_generation_tasks_for_user(
+    db: Session,
+    *,
+    user_id: int,
+    limit: int = 10,
+) -> list[GenerationTask]:
+    return list(
+        db.scalars(
+            select(GenerationTask)
+            .where(GenerationTask.user_id == user_id)
+            .order_by(GenerationTask.created_at.desc(), GenerationTask.id.desc())
+            .limit(limit)
+        ).all()
+    )
+
+
 def mark_generation_task_running(db: Session, task_id: int) -> GenerationTask | None:
     task = get_generation_task(db, task_id)
     if task is None:

@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
 from app.api.dependencies import get_current_user
@@ -13,6 +13,20 @@ router = APIRouter(prefix="/api/generation-tasks", tags=["generation-tasks"])
 
 def success_response(data: object, message: str = "") -> dict[str, object]:
     return {"success": True, "data": data, "message": message}
+
+
+@router.get("")
+def list_generation_tasks(
+    limit: int = Query(default=10, ge=1, le=50),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> dict[str, object]:
+    tasks = generation_task_service.list_generation_tasks_for_user(
+        db,
+        user_id=current_user.id,
+        limit=limit,
+    )
+    return success_response([GenerationTaskRead.model_validate(task).model_dump(mode="json") for task in tasks])
 
 
 @router.get("/{task_id}")

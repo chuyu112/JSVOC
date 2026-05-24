@@ -5,16 +5,18 @@ import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useAuth } from "./AuthProvider";
 import { getCreditBalance } from "@/lib/api/credits";
+import { listGenerationTasks, type GenerationTask } from "@/lib/api/generationTasks";
 // ThemeSwitcher moved to /settings page
 
 const globalNavItems = [
   { label: "项目档案", mobileLabel: "项目", to: "/projects" },
-  { label: "AI聊天", mobileLabel: "聊天", to: "/ai-chat" },
+  { label: "AI爆款拆解", mobileLabel: "爆款", to: "/hot-videos" },
   { label: "AI生图", mobileLabel: "生图", to: "/images" },
   { label: "AI生视频", mobileLabel: "视频", to: "/videos" },
   { label: "数字资产", mobileLabel: "资产", to: "/assets" },
-  { label: "AI爆款拆解", mobileLabel: "爆款", to: "/hot-videos" },
+  { label: "AI聊天", mobileLabel: "聊天", to: "/ai-chat" },
   { label: "AI数字人", mobileLabel: "数字人", to: "/digital-human" },
+  { label: "生成记录", mobileLabel: "记录", to: "/history" },
 ];
 
 function isNavItemActive(pathname: string | null, item: (typeof globalNavItems)[number]) {
@@ -62,10 +64,38 @@ function NavLink({
   );
 }
 
+function taskTypeLabel(taskType: string) {
+  const labels: Record<string, string> = {
+    image_generate: "生图",
+    image_edit: "图生图",
+    video_generate: "生视频",
+  };
+  return labels[taskType] || taskType;
+}
+
+function cleanGenerationError(message: string | null) {
+  if (!message?.trim()) return "未知原因";
+  const trimmed = message.trim();
+  const jsonStart = trimmed.indexOf("{");
+  if (jsonStart >= 0) {
+    try {
+      const parsed = JSON.parse(trimmed.slice(jsonStart));
+      const providerMessage = parsed?.error?.message;
+      if (typeof providerMessage === "string" && providerMessage.trim()) {
+        return providerMessage.trim();
+      }
+    } catch {
+      // Keep the original message when the provider payload is not valid JSON.
+    }
+  }
+  return trimmed;
+}
+
 export default function AppShell({ children }: { children: React.ReactNode }) {
   const auth = useAuth();
   const pathname = usePathname();
   const [creditBalance, setCreditBalance] = useState<number | null>(null);
+  const [recentTasks, setRecentTasks] = useState<GenerationTask[]>([]);
 
   const settingsReturnPath = pathname && pathname !== "/settings" ? pathname : "/projects";
   const settingsHref = `/settings?returnTo=${encodeURIComponent(settingsReturnPath)}`;
@@ -89,7 +119,34 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     };
   }, [auth.isAuthenticated, auth.user?.credit_balance, pathname]);
 
+  useEffect(() => {
+    if (!auth.isAuthenticated) {
+      setRecentTasks([]);
+      return;
+    }
+
+    let cancelled = false;
+
+    async function loadRecentTasks() {
+      try {
+        const tasks = await listGenerationTasks(8);
+        if (!cancelled) setRecentTasks(tasks);
+      } catch {
+        if (!cancelled) setRecentTasks([]);
+      }
+    }
+
+    void loadRecentTasks();
+    const timer = window.setInterval(loadRecentTasks, 12000);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [auth.isAuthenticated, pathname]);
+
   const isLoginPage = pathname === "/login";
+  const latestFailedTask = recentTasks.find((task) => task.status === "failed" && task.error_message);
 
   return (
     <div className="flex flex-col min-h-[100dvh]">
@@ -140,6 +197,25 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
               </div>
             )}
           </div>
+          {auth.isAuthenticated && latestFailedTask && (
+            <div className="flex w-[min(1400px,100%)] items-center gap-2 border-t border-[rgba(255,255,255,0.06)] py-2 text-[12px] text-red-100">
+              <Link
+                href="/history"
+                className="shrink-0 rounded-full border border-red-400/25 bg-red-500/12 px-2.5 py-1 font-[650] text-red-200 transition-colors hover:bg-red-500/18"
+              >
+                生成失败
+              </Link>
+              <span className="shrink-0 text-red-200/90">
+                {taskTypeLabel(latestFailedTask.task_type)} #{latestFailedTask.id}
+              </span>
+              <span
+                className="min-w-0 truncate text-red-100/90"
+                title={cleanGenerationError(latestFailedTask.error_message)}
+              >
+                原因：{cleanGenerationError(latestFailedTask.error_message)}
+              </span>
+            </div>
+          )}
         </header>
       )}
 
