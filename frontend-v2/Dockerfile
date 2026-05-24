@@ -3,6 +3,8 @@ ARG NODE_IMAGE=node:20-alpine
 # ── Build stage ──
 FROM ${NODE_IMAGE} AS builder
 WORKDIR /app
+ARG API_BASE_URL=http://backend:8000
+ENV API_BASE_URL=${API_BASE_URL}
 COPY package*.json ./
 RUN npm ci
 COPY . .
