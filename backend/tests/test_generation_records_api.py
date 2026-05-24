@@ -1,4 +1,5 @@
 import unittest
+from unittest.mock import patch
 
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
@@ -17,6 +18,11 @@ from app.models import topic  # noqa: F401
 
 class GenerationRecordsApiTest(unittest.TestCase):
     def setUp(self) -> None:
+        self.env_patcher = patch.dict("os.environ", {"LLM_PROVIDER": "mock", "LLM_MODEL": "mock-model"})
+        self.env_patcher.start()
+        from app.core.config import get_settings
+
+        get_settings.cache_clear()
         self.engine = create_engine(
             "sqlite:///:memory:",
             connect_args={"check_same_thread": False},
@@ -34,16 +40,23 @@ class GenerationRecordsApiTest(unittest.TestCase):
 
         app.dependency_overrides[get_db] = override_get_db
         self.client = TestClient(app)
+        self.register_user(self.client, "owner", "owner@example.com")
 
     def tearDown(self) -> None:
         app.dependency_overrides.clear()
         Base.metadata.drop_all(bind=self.engine)
         self.engine.dispose()
+        from app.core.config import get_settings
+
+        get_settings.cache_clear()
+        self.env_patcher.stop()
 
     def test_lists_filters_and_opens_generation_records(self) -> None:
         project_id = self._create_project()
-        self.client.post("/api/strategy/account-package/generate", json={"project_id": project_id})
-        self.client.post("/api/strategy/execution-plan/generate", json={"project_id": project_id})
+        self.client.post(
+            "/api/strategy/account-package-execution-plan/generate",
+            json={"project_id": project_id},
+        )
         topic_response = self.client.post(
             "/api/creation/topics/generate",
             json={"project_id": project_id, "platform": "抖音", "goal": "获客", "count": 1},
@@ -57,15 +70,15 @@ class GenerationRecordsApiTest(unittest.TestCase):
         all_response = self.client.get("/api/generation-records")
         self.assertEqual(all_response.status_code, 200)
         all_records = all_response.json()["data"]
-        self.assertEqual(len(all_records), 4)
+        self.assertEqual(len(all_records), 3)
         self.assertEqual(
             {record["module_name"] for record in all_records},
-            {"account_package", "execution_plan", "topics", "script"},
+            {"strategy_bundle", "topics", "script"},
         )
 
         project_response = self.client.get(f"/api/generation-records?project_id={project_id}")
         self.assertEqual(project_response.status_code, 200)
-        self.assertEqual(len(project_response.json()["data"]), 4)
+        self.assertEqual(len(project_response.json()["data"]), 3)
 
         module_response = self.client.get("/api/generation-records?module_name=topics")
         self.assertEqual(module_response.status_code, 200)
@@ -86,6 +99,18 @@ class GenerationRecordsApiTest(unittest.TestCase):
         self.assertIn("latency_ms", detail)
         self.assertIn("created_at", detail)
 
+    def register_user(self, client: TestClient, username: str, email: str) -> None:
+        response = client.post(
+            "/api/auth/register",
+            json={
+                "display_name": username.title(),
+                "username": username,
+                "email": email,
+                "password": "StrongPass123",
+            },
+        )
+        self.assertEqual(response.status_code, 201)
+
     def _create_project(self) -> int:
         create_response = self.client.post(
             "/api/projects",
@@ -101,6 +126,43 @@ class GenerationRecordsApiTest(unittest.TestCase):
             },
         )
         return int(create_response.json()["data"]["id"])
+
+    def test_generation_records_are_filtered_by_current_user(self) -> None:
+        owner_project_id = self._create_project()
+        self.client.post(
+            "/api/strategy/account-package-execution-plan/generate",
+            json={"project_id": owner_project_id},
+        )
+
+        other_client = TestClient(app)
+        self.register_user(other_client, "other", "other@example.com")
+        create_response = other_client.post(
+            "/api/projects",
+            json={
+                "project_name": "other project",
+                "industry": "jewelry",
+                "sub_industry": "jade",
+                "product": "jade bracelet",
+                "personal_intro": "other seller",
+                "target_audience": "other buyers",
+                "platforms": ["douyin"],
+                "current_stage": "cold_start",
+            },
+        )
+        other_project_id = create_response.json()["data"]["id"]
+        other_client.post(
+            "/api/strategy/account-package-execution-plan/generate",
+            json={"project_id": other_project_id},
+        )
+
+        owner_records = self.client.get("/api/generation-records")
+        other_records = other_client.get("/api/generation-records")
+
+        self.assertEqual(owner_records.status_code, 200)
+        self.assertEqual(other_records.status_code, 200)
+        self.assertEqual(len(owner_records.json()["data"]), 1)
+        self.assertEqual(len(other_records.json()["data"]), 1)
+        self.assertNotEqual(owner_records.json()["data"][0]["project_id"], other_records.json()["data"][0]["project_id"])
 
 
 if __name__ == "__main__":

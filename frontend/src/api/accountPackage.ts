@@ -1,12 +1,10 @@
-import { apiClient, type ApiResponse } from './client'
-
 export interface AccountPackageResult {
   account_positioning: string
   persona: string
   target_user_profile: Record<string, unknown>
   account_names: string[]
   bios: Record<string, string>
-  content_columns: string[]
+  content_columns: unknown[]
   trust_design: string[]
   conversion_path: string[]
   platform_strategies: Record<string, unknown>
@@ -27,22 +25,10 @@ export interface AccountStrategyContext extends AccountPackageResult {
 
 export interface AccountPackageGenerateResponse {
   account_package: AccountPackageResult
-  context: AccountStrategyContext
+  context?: AccountStrategyContext | null
   generation_record_id: number
   provider: string
   model: string
   usage: Record<string, unknown>
   latency_ms: number
-}
-
-export async function generateAccountPackage(
-  projectId: number,
-): Promise<AccountPackageGenerateResponse> {
-  const response = await apiClient.post<ApiResponse<AccountPackageGenerateResponse>>(
-    '/api/strategy/account-package/generate',
-    {
-      project_id: projectId,
-    },
-  )
-  return response.data.data
 }

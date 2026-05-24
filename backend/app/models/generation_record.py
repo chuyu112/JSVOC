@@ -4,6 +4,7 @@ from sqlalchemy import DateTime, ForeignKey, Integer, JSON, String
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
+from app.core.datetime_utils import utcnow_naive
 from app.db.base import Base
 
 
@@ -37,4 +38,4 @@ class GenerationRecord(Base):
         nullable=False,
     )
     latency_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow_naive, nullable=False)

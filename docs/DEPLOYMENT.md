@@ -135,6 +135,30 @@ $env:LLM_TIMEOUT_SECONDS="60"
 
 `LLM_TIMEOUT_SECONDS` 控制单次模型请求超时时间，默认 60 秒。模型返回纯 JSON、Markdown JSON 代码块，或在文本中夹带首个 JSON 对象/数组时，Gateway 会尽量解析为结构化数据；解析失败时会保留原始文本到 `data.text`，并继续写入生成历史。
 
+### dataeye provider
+
+`dataeye` 复用 OpenAI Compatible 请求格式，适合接入数眼 AI 平台。`LLM_BASE_URL` 可以只填平台根地址，后端会自动请求 `/v1/chat/completions`。
+
+```powershell
+$env:LLM_PROVIDER="dataeye"
+$env:LLM_BASE_URL="https://platform.shuyanai.com"
+$env:LLM_API_KEY="your-dataeye-api-key"
+$env:LLM_MODEL="deepseek-v4-flash"
+$env:LLM_TIMEOUT_SECONDS="60"
+```
+
+### moyu provider
+
+`moyu` 复用 OpenAI Compatible 请求格式。`LLM_BASE_URL` 填完整 chat completions 地址即可；如果误填成 `POST https://...`，后端会自动去掉 `POST` 前缀。
+
+```powershell
+$env:LLM_PROVIDER="moyu"
+$env:LLM_BASE_URL="https://www.moyu.info/v1/chat/completions"
+$env:LLM_API_KEY="your-moyu-api-key"
+$env:LLM_MODEL="deepseek-v4-flash"
+$env:LLM_TIMEOUT_SECONDS="60"
+```
+
 ### 环境变量清单
 
 ```env
@@ -233,4 +257,100 @@ docker compose down
 
 ```powershell
 docker compose down -v
+```
+
+## 8. 阿里云服务器部署注意事项
+
+服务器推荐部署路径：
+
+```text
+/opt/JPASP
+```
+
+当前已验证可用提交：
+
+```text
+72bce79
+```
+
+### Docker Hub 拉镜像超时
+
+在 Alibaba Cloud Linux 服务器上执行 Docker Compose 时，可能出现 Docker Hub 拉取超时：
+
+```text
+Get "https://registry-1.docker.io/v2/": context deadline exceeded
+```
+
+或：
+
+```text
+net/http: request canceled while waiting for connection
+```
+
+先配置阿里云镜像加速器，再重启 Docker：
+
+```bash
+systemctl daemon-reload
+systemctl restart docker
+docker info | grep -A 10 "Registry Mirrors"
+docker run --rm hello-world
+```
+
+如果镜像加速器仍无法稳定拉取 Docker Hub 镜像，可以在 `.env` 使用基础镜像代理：
+
+```env
+POSTGRES_IMAGE=docker.1ms.run/library/postgres:16
+PYTHON_IMAGE=docker.1ms.run/library/python:3.11-slim
+NODE_IMAGE=docker.1ms.run/library/node:20-alpine
+NGINX_IMAGE=docker.1ms.run/library/nginx:1.27-alpine
+```
+
+### 8000 端口被旧进程占用
+
+如果 backend 启动时报：
+
+```text
+listen tcp4 0.0.0.0:8000: bind: address already in use
+```
+
+检查占用进程：
+
+```bash
+ss -ltnp | grep ':8000'
+```
+
+本次服务器部署曾发现旧 `jlao` 进程占用 8000：
+
+```text
+/opt/jlao/backend/.venv/bin/python -m uvicorn app.main:app --host 127.0.0.1 --port 8000
+```
+
+确认不是当前 JPASP 服务后，停止旧进程，再重新执行：
+
+```bash
+cd /opt/JPASP
+docker compose up -d
+```
+
+### Alembic 文件必须随分支提交
+
+`backend/Dockerfile` 会在构建时复制：
+
+```text
+backend/alembic.ini
+backend/alembic/
+```
+
+并在容器启动时执行：
+
+```bash
+alembic upgrade head
+```
+
+因此 Alembic 文件必须存在于 GitHub 的 `sp8-engineering` 分支中。当前提交 `72bce79` 已包含这些迁移文件。
+
+更完整的服务器部署备忘见：
+
+```text
+docs/SERVER_DEPLOYMENT_NOTES.md
 ```

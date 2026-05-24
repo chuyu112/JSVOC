@@ -1,7 +1,9 @@
+import json
 from typing import Any
 
 from app.models.account_strategy_context import AccountStrategyContext
 from app.models.project import Project
+from app.prompts.formatting import format_prompt_list
 
 
 EXECUTION_PLAN_MODULE = "execution_plan"
@@ -49,6 +51,7 @@ def build_execution_plan_prompts(
     strategy_context: AccountStrategyContext | None,
     cycle: str,
     daily_time: str,
+    previous_plan: dict[str, Any] | None = None,
 ) -> tuple[str, str]:
     platforms = "、".join(project.platforms)
     context_text = "暂无账号包装上下文，请仅基于项目档案生成。"
@@ -56,9 +59,9 @@ def build_execution_plan_prompts(
         context_text = f"""
 - 账号定位：{strategy_context.account_positioning}
 - 人设：{strategy_context.persona}
-- 内容栏目：{"、".join(strategy_context.content_columns)}
-- 信任设计：{"、".join(strategy_context.trust_design)}
-- 转化路径：{"、".join(strategy_context.conversion_path)}
+- 内容栏目：{format_prompt_list(strategy_context.content_columns)}
+- 信任设计：{format_prompt_list(strategy_context.trust_design)}
+- 转化路径：{format_prompt_list(strategy_context.conversion_path)}
 - 平台策略：{strategy_context.platform_strategies}
 """.strip()
 
@@ -94,5 +97,19 @@ def build_execution_plan_prompts(
 4. topic 要体现每日选题方向，shooting_task 要能指导当天怎么拍。
 5. review_metrics 至少包含 3 个可复盘指标。
 6. 输出只返回 JSON，不要输出 Markdown。
+"""
+    if previous_plan is not None:
+        previous_plan_json = json.dumps(previous_plan, ensure_ascii=False, indent=2)
+        user_prompt += f"""
+
+Existing fused execution plan:
+{previous_plan_json}
+
+Merge and fusion requirements:
+1. Treat the existing execution plan above as the accumulated plan from prior generations.
+2. Merge its strong weekly goals, daily topics, shooting tasks, and review metrics into the new plan.
+3. Deduplicate repeated daily topics and avoid cosmetic rewrites of the same task.
+4. Keep one coherent {cycle} execution plan, not multiple versions.
+5. If the new idea conflicts with the existing plan, keep the version that better fits the project file, account strategy, cycle, and daily available time.
 """
     return system_prompt, user_prompt.strip()

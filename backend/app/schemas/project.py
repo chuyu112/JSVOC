@@ -1,4 +1,5 @@
 from datetime import datetime
+from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -11,6 +12,8 @@ class ProjectBase(BaseModel):
     personal_intro: str = Field(min_length=1)
     target_audience: str = Field(min_length=1)
     platforms: list[str] = Field(default_factory=list)
+    benchmark_accounts: list[dict[str, str]] = Field(default_factory=list)
+    benchmark_samples: list[dict[str, Any]] = Field(default_factory=list)
     current_stage: str = Field(min_length=1, max_length=80)
 
 
@@ -26,6 +29,8 @@ class ProjectUpdate(BaseModel):
     personal_intro: str | None = Field(default=None, min_length=1)
     target_audience: str | None = Field(default=None, min_length=1)
     platforms: list[str] | None = None
+    benchmark_accounts: list[dict[str, str]] | None = None
+    benchmark_samples: list[dict[str, Any]] | None = None
     current_stage: str | None = Field(default=None, min_length=1, max_length=80)
 
 

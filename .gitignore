@@ -7,6 +7,9 @@ __pycache__/
 .ruff_cache/
 
 .env
+cookies.txt
+**/cookies.txt
+.cc-connect/
 *.db
 *.sqlite
 *.sqlite3
@@ -17,6 +20,11 @@ frontend/dist/
 frontend/dist-ssr/
 
 *.log
+*.pid
+*.tsbuildinfo
+*.tar.gz
+.tmp-*
+tmp/
 
 fill_docs.bat
 fix_project_docs.bat
@@ -31,9 +39,9 @@ jpasp_dev.db
 *.pyc
 
 node_modules/
+frontend-v2/node_modules/
+frontend-v2/.next/
+frontend-v2/out/
 
 dist/
-
-.deploy/
-.claude/settings.local.json
 

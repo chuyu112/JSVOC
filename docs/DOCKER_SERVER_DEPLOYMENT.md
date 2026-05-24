@@ -537,17 +537,18 @@ product
 
 记住返回的 `id`，下面假设项目 ID 是 `1`。
 
-### 11.2 生成账号包装
+### 11.2 生成账号包装和执行计划
 
 ```bash
-curl -X POST http://localhost:5173/api/strategy/account-package/generate \
+curl -X POST http://localhost:5173/api/strategy/account-package-execution-plan/generate \
   -H "Content-Type: application/json" \
-  -d '{"project_id": 1}'
+  -d '{"project_id":1,"cycle":"30天","daily_time":"2小时"}'
 ```
 
 预期返回：
 
 ```text
+account_package
 account_positioning
 persona
 account_names
@@ -556,26 +557,13 @@ content_columns
 trust_design
 conversion_path
 platform_strategies
-generation_record_id
-```
-
-### 11.3 生成执行计划
-
-```bash
-curl -X POST http://localhost:5173/api/strategy/execution-plan/generate \
-  -H "Content-Type: application/json" \
-  -d '{"project_id":1,"cycle":"30天","daily_time":"2小时"}'
-```
-
-预期返回：
-
-```text
+execution_plan
 weekly_plan
 daily_plan
 generation_record_id
 ```
 
-### 11.4 生成选题
+### 11.3 生成选题
 
 ```bash
 curl -X POST http://localhost:5173/api/creation/topics/generate \
@@ -604,7 +592,7 @@ topic_data
 
 记下其中一个 `topic_id`，下面假设选题 ID 是 `1`。
 
-### 11.5 生成文案
+### 11.4 生成文案
 
 ```bash
 curl -X POST http://localhost:5173/api/creation/scripts/generate \
@@ -623,7 +611,7 @@ conversion_script
 generation_record_id
 ```
 
-### 11.6 查看生成历史
+### 11.5 查看生成历史
 
 ```bash
 curl "http://localhost:5173/api/generation-records?project_id=1"

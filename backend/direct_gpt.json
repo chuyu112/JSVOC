@@ -1,0 +1,1 @@
+{"id":"resp_01d9f6f575706c33016a09ef069c188196af86aec5ffe9f091","object":"chat.completion","created":1779035911,"model":"gpt-5.5","choices":[{"index":0,"message":{"role":"assistant","content":"Hi! How can I help you today?"},"finish_reason":"stop"}],"usage":{"prompt_tokens":18,"completion_tokens":10,"total_tokens":28}}

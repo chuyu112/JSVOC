@@ -1,9 +1,10 @@
 from datetime import datetime
 
-from sqlalchemy import DateTime, ForeignKey, Integer, JSON, String, Text
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, JSON, String, Text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
+from app.core.datetime_utils import utcnow_naive
 from app.db.base import Base
 
 
@@ -22,9 +23,10 @@ class Topic(Base):
     goal: Mapped[str] = mapped_column(String(80), nullable=False, index=True)
     selling_point: Mapped[str | None] = mapped_column(Text, nullable=True)
     score: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    is_favorite: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     topic_data: Mapped[dict] = mapped_column(
         JSON().with_variant(JSONB(), "postgresql"),
         default=dict,
         nullable=False,
     )
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow_naive, nullable=False)

@@ -4,11 +4,14 @@ import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 
 import {
-  generateExecutionPlan,
   type ExecutionPlanGenerateResponse,
   type ExecutionPlanResult,
 } from '../api/executionPlan'
 import { getProject, type Project } from '../api/projects'
+import {
+  executionPlanResponseFromStrategyBundle,
+  generateStrategyBundle,
+} from '../api/strategyBundle'
 
 const route = useRoute()
 const router = useRouter()
@@ -24,6 +27,15 @@ const dailyTimeOptions = ['1小时', '2小时', '3小时', '半天']
 
 const executionPlan = computed<ExecutionPlanResult | null>(
   () => result.value?.execution_plan ?? null,
+)
+const weeklyPlanCount = computed(() => executionPlan.value?.weekly_plan.length ?? 0)
+const dailyPlanCount = computed(() => executionPlan.value?.daily_plan.length ?? 0)
+const reviewMetricCount = computed(
+  () =>
+    executionPlan.value?.daily_plan.reduce(
+      (total, day) => total + day.review_metrics.length,
+      0,
+    ) ?? 0,
 )
 
 function projectId() {
@@ -44,8 +56,9 @@ async function fetchProject() {
 async function handleGenerate() {
   generating.value = true
   try {
-    result.value = await generateExecutionPlan(projectId(), cycle.value, dailyTime.value)
-    ElMessage.success('执行计划已生成')
+    const bundle = await generateStrategyBundle(projectId(), cycle.value, dailyTime.value)
+    result.value = executionPlanResponseFromStrategyBundle(bundle)
+    ElMessage.success('账号包装和执行计划已生成')
   } catch (error) {
     ElMessage.error('执行计划生成失败')
   } finally {
@@ -135,12 +148,26 @@ onMounted(fetchProject)
           <el-button @click="copyResult">复制结果</el-button>
         </div>
 
-        <div class="result-grid">
-          <article class="result-card wide">
-            <h2>周期</h2>
-            <p>{{ executionPlan.cycle }}</p>
-          </article>
+        <div class="overview-strip result-metrics">
+          <div class="overview-item tone-mint">
+            <span>周期</span>
+            <strong>{{ executionPlan.cycle }}</strong>
+          </div>
+          <div class="overview-item tone-purple">
+            <span>周计划</span>
+            <strong>{{ weeklyPlanCount }}</strong>
+          </div>
+          <div class="overview-item tone-blue">
+            <span>日任务</span>
+            <strong>{{ dailyPlanCount }}</strong>
+          </div>
+          <div class="overview-item tone-orange">
+            <span>复盘指标</span>
+            <strong>{{ reviewMetricCount }}</strong>
+          </div>
+        </div>
 
+        <div class="result-grid">
           <article class="result-card wide">
             <h2>每周计划</h2>
             <el-table :data="executionPlan.weekly_plan" border class="plan-table">

@@ -1,9 +1,11 @@
 from datetime import datetime
+from typing import Any
 
 from sqlalchemy import DateTime, Integer, JSON, String, Text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
+from app.core.datetime_utils import utcnow_naive
 from app.db.base import Base
 
 
@@ -23,11 +25,21 @@ class Project(Base):
         default=list,
         nullable=False,
     )
+    benchmark_accounts: Mapped[list[dict[str, str]]] = mapped_column(
+        JSON().with_variant(JSONB(), "postgresql"),
+        default=list,
+        nullable=False,
+    )
+    benchmark_samples: Mapped[list[dict[str, Any]]] = mapped_column(
+        JSON().with_variant(JSONB(), "postgresql"),
+        default=list,
+        nullable=False,
+    )
     current_stage: Mapped[str] = mapped_column(String(80), nullable=False)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow_naive, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime,
-        default=datetime.utcnow,
-        onupdate=datetime.utcnow,
+        default=utcnow_naive,
+        onupdate=utcnow_naive,
         nullable=False,
     )

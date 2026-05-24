@@ -1,13 +1,18 @@
 ARG PYTHON_IMAGE=python:3.11-slim
 FROM ${PYTHON_IMAGE}
 
+ARG PIP_INDEX_URL=https://mirrors.aliyun.com/pypi/simple/
+
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
+ENV PIP_INDEX_URL=${PIP_INDEX_URL}
+ENV PIP_DEFAULT_TIMEOUT=120
+ENV PIP_RETRIES=5
 
 WORKDIR /app
 
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir --timeout "${PIP_DEFAULT_TIMEOUT}" --retries "${PIP_RETRIES}" -r requirements.txt
 
 COPY alembic.ini .
 COPY alembic ./alembic

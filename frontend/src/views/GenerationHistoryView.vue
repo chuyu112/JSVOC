@@ -9,6 +9,10 @@ import {
   listGenerationRecords,
   type GenerationRecord,
 } from '../api/generationRecords'
+import {
+  groupGenerationRecords,
+  type GenerationHistoryRow,
+} from '../utils/generationHistoryGrouping'
 
 const route = useRoute()
 const router = useRouter()
@@ -18,6 +22,13 @@ const records = ref<GenerationRecord[]>([])
 const detailById = ref<Record<number, GenerationRecord>>({})
 const moduleName = ref('')
 const projectIdInput = ref(route.params.id ? String(route.params.id) : '')
+const displayRecords = computed(() => groupGenerationRecords(records.value))
+const groupedRecordCount = computed(
+  () => displayRecords.value.filter((record) => record.is_grouped).length,
+)
+const moduleTypeCount = computed(
+  () => new Set(displayRecords.value.map((record) => record.module_name)).size,
+)
 
 const moduleOptions = [
   { label: '全部模块', value: '' },
@@ -52,7 +63,8 @@ async function fetchRecords() {
   }
 }
 
-async function loadDetail(row: GenerationRecord) {
+async function loadDetail(row: GenerationHistoryRow) {
+  if (row.is_grouped) return
   if (detailById.value[row.id]) return
 
   detailLoadingId.value = row.id
@@ -69,8 +81,49 @@ function formatJson(value: unknown) {
   return JSON.stringify(value ?? {}, null, 2)
 }
 
+function moduleTagClass(module: string) {
+  if (module === 'account_package') return 'module-purple'
+  if (module === 'execution_plan') return 'module-mint'
+  if (module === 'topics') return 'module-orange'
+  if (module === 'script') return 'module-blue'
+  return 'module-gray'
+}
+
 function formatTime(value: string) {
   return new Date(value).toLocaleString()
+}
+
+function formatCompactTime(value: string) {
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return '-'
+  const month = date.getMonth() + 1
+  const day = date.getDate()
+  const hours = String(date.getHours()).padStart(2, '0')
+  const minutes = String(date.getMinutes()).padStart(2, '0')
+  return `${month}/${day} ${hours}:${minutes}`
+}
+
+function formatLatencySeconds(value: number | null | undefined) {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return '-'
+  const seconds = value / 1000
+  const formatted = seconds >= 10 ? seconds.toFixed(0) : seconds.toFixed(1)
+  return `${formatted} 秒`
+}
+
+function compactText(value: string | number | null | undefined, maxLength = 14) {
+  const text = value == null || value === '' ? '-' : String(value)
+  return text.length > maxLength ? `${text.slice(0, maxLength - 1)}…` : text
+}
+
+function formatProvider(value: string | null | undefined) {
+  if (value === 'openai_compatible') return 'OpenAI'
+  if (value === 'dataeye') return 'DataEye'
+  if (value === 'moyu') return 'Moyu'
+  return compactText(value, 12)
+}
+
+function formatModel(value: string | null | undefined) {
+  return compactText(value, 14)
 }
 
 async function copyText(text: string, message: string) {
@@ -92,6 +145,10 @@ function copyOutput(record: GenerationRecord) {
 
 function copyRecord(record: GenerationRecord) {
   copyText(formatJson(record), '已复制完整 JSON')
+}
+
+function formatAverageTopicTime(row: GenerationHistoryRow) {
+  return formatLatencySeconds(row.avg_topic_latency_ms)
 }
 
 function backToProject() {
@@ -119,6 +176,21 @@ onMounted(fetchRecords)
       </div>
     </div>
 
+    <div class="overview-strip">
+      <div class="overview-item tone-mint">
+        <span>记录数</span>
+        <strong>{{ displayRecords.length }}</strong>
+      </div>
+      <div class="overview-item tone-purple">
+        <span>模块数</span>
+        <strong>{{ moduleTypeCount }}</strong>
+      </div>
+      <div class="overview-item tone-orange">
+        <span>批量记录</span>
+        <strong>{{ groupedRecordCount }}</strong>
+      </div>
+    </div>
+
     <div class="plan-controls">
       <el-form label-position="top" class="plan-control-form">
         <div class="history-control-grid">
@@ -139,70 +211,101 @@ onMounted(fetchRecords)
       </el-form>
     </div>
 
-    <el-table
-      v-loading="loading"
-      :data="records"
-      border
-      class="plan-table"
-      row-key="id"
-      @expand-change="loadDetail"
-    >
-      <el-table-column type="expand">
-        <template #default="{ row }">
-          <div class="history-detail">
-            <div class="result-toolbar">
-              <div class="meta-text">
-                记录 ID：{{ row.id }} / Prompt：{{ row.prompt_version || '无' }} / 耗时：{{
-                  row.latency_ms ?? 0
-                }} ms
+    <div class="table-panel">
+      <el-table
+        v-loading="loading"
+        :data="displayRecords"
+        border
+        class="plan-table history-table"
+        size="small"
+        row-key="id"
+        @expand-change="loadDetail"
+      >
+        <el-table-column type="expand">
+          <template #default="{ row }">
+            <div class="history-detail">
+              <div class="result-toolbar">
+                <div class="meta-text">
+                  记录 ID：{{ row.id }} / Prompt：{{ row.prompt_version || '无' }} / 耗时：{{
+                    formatLatencySeconds(row.latency_ms)
+                  }}
+                </div>
+                <div class="header-actions">
+                  <el-button size="small" @click="copyInput(detailById[row.id] || row)">
+                    复制 input_data
+                  </el-button>
+                  <el-button size="small" @click="copyOutput(detailById[row.id] || row)">
+                    复制 output_data
+                  </el-button>
+                  <el-button size="small" @click="copyRecord(detailById[row.id] || row)">
+                    复制完整 JSON
+                  </el-button>
+                </div>
               </div>
-              <div class="header-actions">
-                <el-button size="small" @click="copyInput(detailById[row.id] || row)">
-                  复制 input_data
-                </el-button>
-                <el-button size="small" @click="copyOutput(detailById[row.id] || row)">
-                  复制 output_data
-                </el-button>
-                <el-button size="small" @click="copyRecord(detailById[row.id] || row)">
-                  复制完整 JSON
-                </el-button>
+              <el-skeleton v-if="detailLoadingId === row.id" :rows="4" animated />
+              <div v-else class="history-detail-grid">
+                <article class="result-card">
+                  <h2>input_data</h2>
+                  <pre>{{ formatJson((detailById[row.id] || row).input_data) }}</pre>
+                </article>
+                <article class="result-card">
+                  <h2>output_data</h2>
+                  <pre>{{ formatJson((detailById[row.id] || row).output_data) }}</pre>
+                </article>
+                <article class="result-card">
+                  <h2>token_usage</h2>
+                  <pre>{{ formatJson((detailById[row.id] || row).token_usage) }}</pre>
+                </article>
+                <article class="result-card">
+                  <h2>耗时</h2>
+                  <p>{{ formatLatencySeconds((detailById[row.id] || row).latency_ms) }}</p>
+                </article>
               </div>
             </div>
-            <el-skeleton v-if="detailLoadingId === row.id" :rows="4" animated />
-            <div v-else class="history-detail-grid">
-              <article class="result-card">
-                <h2>input_data</h2>
-                <pre>{{ formatJson((detailById[row.id] || row).input_data) }}</pre>
-              </article>
-              <article class="result-card">
-                <h2>output_data</h2>
-                <pre>{{ formatJson((detailById[row.id] || row).output_data) }}</pre>
-              </article>
-              <article class="result-card">
-                <h2>token_usage</h2>
-                <pre>{{ formatJson((detailById[row.id] || row).token_usage) }}</pre>
-              </article>
-              <article class="result-card">
-                <h2>latency_ms</h2>
-                <p>{{ (detailById[row.id] || row).latency_ms ?? 0 }}</p>
-              </article>
-            </div>
-          </div>
-        </template>
-      </el-table-column>
-      <el-table-column prop="id" label="ID" width="80" />
-      <el-table-column label="模块" min-width="140">
-        <template #default="{ row }">{{ formatModuleName(row.module_name) }}</template>
-      </el-table-column>
-      <el-table-column prop="project_id" label="项目 ID" width="100" />
-      <el-table-column prop="model_provider" label="模型供应商" min-width="140" />
-      <el-table-column prop="model_name" label="模型名称" min-width="160" />
-      <el-table-column label="耗时" width="100">
-        <template #default="{ row }">{{ row.latency_ms ?? 0 }} ms</template>
-      </el-table-column>
-      <el-table-column label="创建时间" min-width="190">
-        <template #default="{ row }">{{ formatTime(row.created_at) }}</template>
-      </el-table-column>
-    </el-table>
+          </template>
+        </el-table-column>
+        <el-table-column prop="id" label="ID" width="58" />
+        <el-table-column label="模块" width="104">
+          <template #default="{ row }">
+            <el-tag :class="['module-tag', moduleTagClass(row.module_name)]">
+              {{ formatModuleName(row.module_name) }}
+            </el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column label="数量" width="58">
+          <template #default="{ row }">
+            <span class="count-pill">{{ row.topic_count || 1 }}</span>
+          </template>
+        </el-table-column>
+        <el-table-column prop="project_id" label="项目" width="58" />
+        <el-table-column label="供应商" width="96" show-overflow-tooltip>
+          <template #default="{ row }">
+            <span class="history-cell-text" :title="row.model_provider">
+              {{ formatProvider(row.model_provider) }}
+            </span>
+          </template>
+        </el-table-column>
+        <el-table-column label="模型" width="116" show-overflow-tooltip>
+          <template #default="{ row }">
+            <span class="history-cell-text" :title="row.model_name">
+              {{ formatModel(row.model_name) }}
+            </span>
+          </template>
+        </el-table-column>
+        <el-table-column label="耗时" width="82">
+          <template #default="{ row }">{{ compactText(formatLatencySeconds(row.latency_ms), 10) }}</template>
+        </el-table-column>
+        <el-table-column label="均耗时" width="82">
+          <template #default="{ row }">{{ formatAverageTopicTime(row) }}</template>
+        </el-table-column>
+        <el-table-column label="时间" width="112">
+          <template #default="{ row }">
+            <span class="history-cell-text" :title="formatTime(row.created_at)">
+              {{ formatCompactTime(row.created_at) }}
+            </span>
+          </template>
+        </el-table-column>
+      </el-table>
+    </div>
   </section>
 </template>

@@ -1,8 +1,10 @@
 from typing import Any
 
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.llm.llm_gateway import LLMGateway, LLMGatewayRequest, LLMGatewayResponse
+from app.models.generation_record import GenerationRecord
 from app.prompts.execution_plan_prompt import (
     EXECUTION_PLAN_MODULE,
     EXECUTION_PLAN_OUTPUT_SCHEMA,
@@ -31,11 +33,27 @@ def generate_execution_plan(
         db,
         payload.project_id,
     )
+    metadata = {
+        "project_id": project.id,
+        "cycle": payload.cycle,
+        "daily_time": payload.daily_time,
+        "platforms": project.platforms,
+        "industry": project.industry,
+        "product": project.product,
+        "account_strategy_context_id": strategy_context.id if strategy_context else None,
+    }
+    previous_record = get_latest_matching_execution_plan_record(db, project.id, metadata)
+    previous_plan = None
+    if previous_record is not None:
+        previous_plan = previous_record.output_data.get("data") or previous_record.output_data
+        metadata["previous_execution_plan_record_id"] = previous_record.id
+
     system_prompt, user_prompt = build_execution_plan_prompts(
         project,
         strategy_context,
         payload.cycle,
         payload.daily_time,
+        previous_plan,
     )
     gateway_result = LLMGateway().generate(
         db=db,
@@ -47,15 +65,7 @@ def generate_execution_plan(
             user_prompt=user_prompt,
             output_schema=EXECUTION_PLAN_OUTPUT_SCHEMA,
             temperature=payload.temperature,
-            metadata={
-                "project_id": project.id,
-                "cycle": payload.cycle,
-                "daily_time": payload.daily_time,
-                "platforms": project.platforms,
-                "industry": project.industry,
-                "product": project.product,
-                "account_strategy_context_id": strategy_context.id if strategy_context else None,
-            },
+            metadata=metadata,
         ),
     )
     if not gateway_result.success:
@@ -68,6 +78,26 @@ def generate_execution_plan(
         result=normalize_execution_plan(gateway_result.data, payload.cycle),
         gateway_result=gateway_result,
     )
+
+
+def get_latest_matching_execution_plan_record(
+    db: Session,
+    project_id: int,
+    metadata: dict[str, Any],
+) -> GenerationRecord | None:
+    statement = (
+        select(GenerationRecord)
+        .where(
+            GenerationRecord.project_id == project_id,
+            GenerationRecord.module_name == EXECUTION_PLAN_MODULE,
+        )
+        .order_by(GenerationRecord.created_at.desc(), GenerationRecord.id.desc())
+    )
+    for record in db.scalars(statement).all():
+        record_metadata = (record.input_data or {}).get("metadata") or {}
+        if all(record_metadata.get(key) == value for key, value in metadata.items()):
+            return record
+    return None
 
 
 def normalize_execution_plan(data: Any, fallback_cycle: str) -> ExecutionPlanResult:

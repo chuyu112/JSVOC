@@ -15,10 +15,11 @@ class AccountPackageResult(BaseModel):
     target_user_profile: dict[str, Any]
     account_names: list[str]
     bios: dict[str, str]
-    content_columns: list[str]
+    content_columns: list[Any]
     trust_design: list[str]
     conversion_path: list[str]
     platform_strategies: dict[str, Any]
+    rubric_notes: dict[str, Any] = Field(default_factory=dict)
 
 
 class AccountStrategyContextCreate(AccountPackageResult):

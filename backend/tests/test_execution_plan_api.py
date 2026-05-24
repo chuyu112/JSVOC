@@ -1,4 +1,5 @@
 import unittest
+from unittest.mock import patch
 
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, select
@@ -14,7 +15,7 @@ from app.models import project  # noqa: F401
 from app.models.generation_record import GenerationRecord
 
 
-class ExecutionPlanApiTest(unittest.TestCase):
+class StrategyBundleExecutionPlanApiTest(unittest.TestCase):
     def setUp(self) -> None:
         self.engine = create_engine(
             "sqlite:///:memory:",
@@ -33,13 +34,26 @@ class ExecutionPlanApiTest(unittest.TestCase):
 
         app.dependency_overrides[get_db] = override_get_db
         self.client = TestClient(app)
+        self.register_user("owner", "owner@example.com")
 
     def tearDown(self) -> None:
         app.dependency_overrides.clear()
         Base.metadata.drop_all(bind=self.engine)
         self.engine.dispose()
 
-    def test_mock_provider_generates_30_day_execution_plan_and_record(self) -> None:
+    def register_user(self, username: str, email: str) -> None:
+        response = self.client.post(
+            "/api/auth/register",
+            json={
+                "display_name": username.title(),
+                "username": username,
+                "email": email,
+                "password": "StrongPass123",
+            },
+        )
+        self.assertEqual(response.status_code, 201)
+
+    def test_mock_provider_generates_30_day_execution_plan_from_bundle_and_record(self) -> None:
         create_response = self.client.post(
             "/api/projects",
             json={
@@ -55,10 +69,15 @@ class ExecutionPlanApiTest(unittest.TestCase):
         )
         project_id = create_response.json()["data"]["id"]
 
-        response = self.client.post(
-            "/api/strategy/execution-plan/generate",
-            json={"project_id": project_id},
-        )
+        with patch.dict("os.environ", {"LLM_PROVIDER": "mock", "LLM_MODEL": "mock-model"}):
+            from app.core.config import get_settings
+
+            get_settings.cache_clear()
+            response = self.client.post(
+                "/api/strategy/account-package-execution-plan/generate",
+                json={"project_id": project_id},
+            )
+            get_settings.cache_clear()
 
         self.assertEqual(response.status_code, 200)
         body = response.json()
@@ -78,12 +97,13 @@ class ExecutionPlanApiTest(unittest.TestCase):
             records = db.scalars(
                 select(GenerationRecord).where(
                     GenerationRecord.project_id == project_id,
-                    GenerationRecord.module_name == "execution_plan",
+                    GenerationRecord.module_name == "strategy_bundle",
                 )
             ).all()
 
         self.assertEqual(len(records), 1)
-        self.assertEqual(records[0].output_data["data"]["cycle"], "30天")
+        self.assertIn("account_package", records[0].output_data["data"])
+        self.assertIn("execution_plan", records[0].output_data["data"])
 
 
 if __name__ == "__main__":

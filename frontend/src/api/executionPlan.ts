@@ -1,5 +1,3 @@
-import { apiClient, type ApiResponse } from './client'
-
 export interface WeeklyPlanItem {
   week: number
   goal: string
@@ -29,20 +27,4 @@ export interface ExecutionPlanGenerateResponse {
   model: string
   usage: Record<string, unknown>
   latency_ms: number
-}
-
-export async function generateExecutionPlan(
-  projectId: number,
-  cycle = '30天',
-  dailyTime = '2小时',
-): Promise<ExecutionPlanGenerateResponse> {
-  const response = await apiClient.post<ApiResponse<ExecutionPlanGenerateResponse>>(
-    '/api/strategy/execution-plan/generate',
-    {
-      project_id: projectId,
-      cycle,
-      daily_time: dailyTime,
-    },
-  )
-  return response.data.data
 }

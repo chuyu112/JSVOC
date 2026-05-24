@@ -15,37 +15,33 @@ v0.1.0-mvp 完成 AI 短视频账号策略与内容创作系统的主链路：
    - 编辑项目
    - 删除项目
 
-2. 账号包装
+2. 账号包装和执行计划
    - 从项目详情进入账号包装页
-   - 调用 `POST /api/strategy/account-package/generate`
-   - 结果保存到 `account_strategy_contexts`
-   - 生成记录写入 `generation_records`
-
-3. 执行计划
    - 从项目详情进入执行计划页
-   - 调用 `POST /api/strategy/execution-plan/generate`
+   - 调用 `POST /api/strategy/account-package-execution-plan/generate`
+   - 结果保存到 `account_strategy_contexts`
    - 返回至少 4 周计划和 30 天 daily_plan
    - 生成记录写入 `generation_records`
 
-4. 选题生成
+3. 选题生成
    - 从项目详情进入选题生成页
    - 调用 `POST /api/creation/topics/generate`
    - 支持 `count=20` 返回 20 个选题
    - 选题保存到 `topics`
    - 生成记录写入 `generation_records`
 
-5. 文案生成
+4. 文案生成
    - 从选题进入文案生成页
    - 调用 `POST /api/creation/scripts/generate`
    - 文案保存到 `scripts`
    - 生成记录写入 `generation_records`
 
-6. 生成历史
+5. 生成历史
    - 访问 `/history`
    - 访问 `/projects/:id/history`
    - 调用 `GET /api/generation-records`
    - 调用 `GET /api/generation-records/{record_id}`
-   - 查看 `account_package`、`execution_plan`、`topics`、`script` 四类记录
+   - 查看 `strategy_bundle`、`topics`、`script` 三类记录
 
 ### 测试结果
 

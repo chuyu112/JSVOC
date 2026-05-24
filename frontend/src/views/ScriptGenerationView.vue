@@ -45,6 +45,14 @@ function topicId() {
   return Number(route.params.topicId)
 }
 
+function platformTagClass(platformName: string) {
+  if (platformName.includes('抖音')) return 'platform-douyin'
+  if (platformName.includes('快手')) return 'platform-kuaishou'
+  if (platformName.includes('小红书')) return 'platform-xiaohongshu'
+  if (platformName.includes('视频号')) return 'platform-video'
+  return ''
+}
+
 async function fetchContext() {
   loading.value = true
   try {
@@ -90,10 +98,15 @@ async function handleGenerate() {
     )
     ElMessage.success('文案已生成')
   } catch (error) {
-    ElMessage.error('文案生成失败')
+    ElMessage.error(apiErrorMessage(error, '文案生成失败'))
   } finally {
     generating.value = false
   }
+}
+
+function apiErrorMessage(error: unknown, fallback: string) {
+  const detail = (error as { response?: { data?: { detail?: unknown } } })?.response?.data?.detail
+  return typeof detail === 'string' && detail.trim() ? detail : fallback
 }
 
 function scriptText() {
@@ -154,11 +167,13 @@ onMounted(fetchContext)
       <article v-if="topic" class="result-card wide topic-summary-card">
         <div class="topic-card-header">
           <div>
-            <el-tag type="success">{{ topic.platform }}</el-tag>
+            <el-tag :class="['platform-tag', platformTagClass(topic.platform)]">
+              {{ topic.platform }}
+            </el-tag>
             <el-tag class="tag-item">{{ topic.content_type }}</el-tag>
             <el-tag class="tag-item" type="warning">{{ topic.goal }}</el-tag>
           </div>
-          <strong>{{ topic.score }}</strong>
+          <span class="score-badge">{{ topic.score }}</span>
         </div>
         <h2>{{ topic.title }}</h2>
         <p>{{ topic.topic_data.user_pain_point }}</p>
@@ -179,7 +194,7 @@ onMounted(fetchContext)
               </el-select>
             </el-form-item>
             <el-form-item label="平台">
-              <el-select v-model="platform" class="full-width">
+              <el-select v-model="platform" class="full-width platform-select" popper-class="platform-select-popper">
                 <el-option
                   v-for="item in platformOptions"
                   :key="item"

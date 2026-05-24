@@ -1,14 +1,19 @@
 import { createRouter, createWebHistory } from 'vue-router'
+import { useAuthStore } from '../stores/auth'
 
-import AccountPackageView from '../views/AccountPackageView.vue'
-import ExecutionPlanView from '../views/ExecutionPlanView.vue'
-import GenerationHistoryView from '../views/GenerationHistoryView.vue'
-import GatewayProviderSettingsView from '../views/GatewayProviderSettingsView.vue'
-import ProjectCreateView from '../views/ProjectCreateView.vue'
-import ProjectDetailView from '../views/ProjectDetailView.vue'
-import ProjectListView from '../views/ProjectListView.vue'
-import ScriptGenerationView from '../views/ScriptGenerationView.vue'
-import TopicGenerationView from '../views/TopicGenerationView.vue'
+const AccountPackageView = () => import('../views/AccountPackageView.vue')
+const AuthView = () => import('../views/AuthView.vue')
+const DigitalAssetsView = () => import('../views/DigitalAssetsView.vue')
+const ExecutionPlanView = () => import('../views/ExecutionPlanView.vue')
+const GenerationHistoryView = () => import('../views/GenerationHistoryView.vue')
+const ImageGenerationView = () => import('../views/ImageGenerationView.vue')
+const ProjectCreateView = () => import('../views/ProjectCreateView.vue')
+const ProjectDetailView = () => import('../views/ProjectDetailView.vue')
+const ProjectListView = () => import('../views/ProjectListView.vue')
+const ScriptGenerationView = () => import('../views/ScriptGenerationView.vue')
+const TopicGenerationView = () => import('../views/TopicGenerationView.vue')
+const VideoGenerationView = () => import('../views/VideoGenerationView.vue')
+const WorkflowPlaceholderView = () => import('../views/WorkflowPlaceholderView.vue')
 
 export const router = createRouter({
   history: createWebHistory(),
@@ -16,6 +21,12 @@ export const router = createRouter({
     {
       path: '/',
       redirect: '/projects',
+    },
+    {
+      path: '/login',
+      name: 'login',
+      component: AuthView,
+      meta: { public: true },
     },
     {
       path: '/projects',
@@ -52,20 +63,39 @@ export const router = createRouter({
       props: true,
     },
     {
+      path: '/projects/:id/images',
+      name: 'image-generation',
+      component: ImageGenerationView,
+      props: true,
+    },
+    {
+      path: '/projects/:id/videos',
+      name: 'video-generation',
+      component: VideoGenerationView,
+      props: true,
+    },
+    {
+      path: '/projects/:id/publish',
+      name: 'content-publish',
+      component: WorkflowPlaceholderView,
+      props: true,
+      meta: { workflow: 'publish' },
+    },
+    {
       path: '/projects/:projectId/topics/:topicId/script',
       name: 'script-generation',
       component: ScriptGenerationView,
       props: true,
     },
     {
+      path: '/assets',
+      name: 'digital-assets',
+      component: DigitalAssetsView,
+    },
+    {
       path: '/history',
       name: 'generation-history',
       component: GenerationHistoryView,
-    },
-    {
-      path: '/admin/gateway-providers',
-      name: 'gateway-provider-settings',
-      component: GatewayProviderSettingsView,
     },
     {
       path: '/projects/:id/history',
@@ -74,4 +104,19 @@ export const router = createRouter({
       props: true,
     },
   ],
+})
+
+router.beforeEach(async (to) => {
+  if (to.meta.public) return true
+
+  const auth = useAuthStore()
+  try {
+    await auth.loadCurrentUser()
+    return true
+  } catch (error) {
+    return {
+      path: '/login',
+      query: { redirect: to.fullPath },
+    }
+  }
 })

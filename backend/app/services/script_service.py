@@ -4,6 +4,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.llm.llm_gateway import LLMGateway, LLMGatewayRequest, LLMGatewayResponse
+from app.models.project import Project
 from app.models.script import Script
 from app.models.topic import Topic
 from app.prompts.script_prompt import (
@@ -13,7 +14,7 @@ from app.prompts.script_prompt import (
     build_script_prompts,
 )
 from app.schemas.script import ScriptCreate, ScriptGenerateRequest
-from app.services import account_strategy_context_service, project_service
+from app.services import account_strategy_context_service, digital_asset_service, project_service
 
 
 class ScriptGeneration:
@@ -22,12 +23,18 @@ class ScriptGeneration:
         self.gateway_result = gateway_result
 
 
-def generate_script(db: Session, payload: ScriptGenerateRequest) -> ScriptGeneration | None:
-    project = project_service.get_project(db, payload.project_id)
+def generate_script(
+    db: Session,
+    payload: ScriptGenerateRequest,
+    user_id: int,
+    project: Project | None = None,
+    topic: Topic | None = None,
+) -> ScriptGeneration | None:
+    project = project or project_service.get_project_for_user(db, payload.project_id, user_id)
     if project is None:
         return None
 
-    topic = db.get(Topic, payload.topic_id)
+    topic = topic or db.get(Topic, payload.topic_id)
     if topic is None or topic.project_id != project.id:
         return ScriptGeneration(script=None)
 
@@ -44,10 +51,12 @@ def generate_script(db: Session, payload: ScriptGenerateRequest) -> ScriptGenera
         payload.script_type,
         payload.duration,
         payload.goal,
+        get_topic_scripts(db, topic.id, limit=10),
     )
     gateway_result = LLMGateway().generate(
         db=db,
         project_id=project.id,
+        user_id=user_id,
         prompt_version=SCRIPT_PROMPT_VERSION,
         request=LLMGatewayRequest(
             module_name=SCRIPT_MODULE,
@@ -55,6 +64,7 @@ def generate_script(db: Session, payload: ScriptGenerateRequest) -> ScriptGenera
             user_prompt=user_prompt,
             output_schema=SCRIPT_OUTPUT_SCHEMA,
             temperature=payload.temperature,
+            max_tokens=4000,
             metadata={
                 "project_id": project.id,
                 "topic_id": topic.id,
@@ -74,6 +84,13 @@ def generate_script(db: Session, payload: ScriptGenerateRequest) -> ScriptGenera
 
     script_in = normalize_script(gateway_result.data, payload, topic, platform)
     script = create_script(db, script_in)
+    digital_asset_service.create_script_asset(
+        db,
+        user_id=user_id,
+        project=project,
+        script=script,
+        generation_record_id=gateway_result.generation_record_id,
+    )
     return ScriptGeneration(script=script, gateway_result=gateway_result)
 
 
@@ -126,6 +143,7 @@ def normalize_script(
     if not isinstance(data, dict):
         data = {}
 
+    raw_rubric = data.get("rubric") or {}
     script_data = {
         "hook": str(data.get("hook") or ""),
         "subtitle_points": ensure_string_list(data.get("subtitle_points")),
@@ -133,6 +151,15 @@ def normalize_script(
         "private_message_guidance": str(data.get("private_message_guidance") or ""),
         "duration": payload.duration,
         "goal": payload.goal,
+        "rubric": {
+            "er": _ensure_int_score(raw_rubric.get("er")),
+            "sr": _ensure_int_score(raw_rubric.get("sr")),
+            "hp": _ensure_int_score(raw_rubric.get("hp")),
+            "ql": _ensure_int_score(raw_rubric.get("ql")),
+            "na": _ensure_int_score(raw_rubric.get("na")),
+            "ab": _ensure_int_score(raw_rubric.get("ab")),
+            "sat": _ensure_int_score(raw_rubric.get("sat")),
+        },
     }
     return ScriptCreate(
         project_id=payload.project_id,
@@ -155,3 +182,11 @@ def ensure_string_list(value: Any) -> list[str]:
     if value is None:
         return []
     return [str(value)]
+
+
+def _ensure_int_score(value: Any) -> int:
+    try:
+        score = int(value)
+    except (TypeError, ValueError):
+        return 0
+    return min(5, max(0, score))

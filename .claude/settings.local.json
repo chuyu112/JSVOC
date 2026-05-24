@@ -1,0 +1,23 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python *)",
+      "Bash(grep -E \"\\\\.env$|\\\\.db$|jpasp_dev\")",
+      "Bash(git config *)",
+      "Bash(git add *)",
+      "Bash(git commit *)",
+      "Bash(git push *)",
+      "Bash(where ssh *)",
+      "Bash(ssh-keygen *)",
+      "Bash(ssh-keyscan -t ed25519,ecdsa,rsa 47.120.41.143)",
+      "Bash(ssh *)",
+      "Bash(where python *)",
+      "Read(//c/Users/Administrator/.claude/**)",
+      "Bash(cp *)",
+      "Bash(npm install *)",
+      "Bash(npm run *)",
+      "Bash(curl *)",
+      "Bash(python3 darkmode.py)"
+    ]
+  }
+}

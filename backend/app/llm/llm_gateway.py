@@ -1,6 +1,7 @@
 import json
 import time
 from typing import Any
+from urllib.parse import urlsplit, urlunsplit
 
 import httpx
 from pydantic import BaseModel, Field
@@ -8,8 +9,34 @@ from sqlalchemy.orm import Session
 
 from app.core.config import Settings, get_settings
 from app.schemas.generation_record import GenerationRecordCreate
-from app.services.gateway_provider_service import get_default_gateway_provider
 from app.services.generation_record_service import create_generation_record
+
+
+_HTTP_CLIENT: httpx.Client | None = None
+
+
+def get_http_client() -> httpx.Client:
+    """Return a module-level httpx.Client so LLM calls reuse TCP connections."""
+    global _HTTP_CLIENT
+    if _HTTP_CLIENT is None:
+        _HTTP_CLIENT = httpx.Client(
+            limits=httpx.Limits(max_connections=50, max_keepalive_connections=20),
+            timeout=httpx.Timeout(60.0),
+            follow_redirects=True,
+        )
+    return _HTTP_CLIENT
+
+
+def close_http_client() -> None:
+    global _HTTP_CLIENT
+    if _HTTP_CLIENT is not None:
+        _HTTP_CLIENT.close()
+        _HTTP_CLIENT = None
+
+
+def _post_json(url: str, headers: dict[str, str], json: dict[str, Any], timeout: float) -> httpx.Response:
+    """Wrapper around the shared httpx client; exposed at module scope so tests can patch it."""
+    return get_http_client().post(url, headers=headers, json=json, timeout=timeout)
 
 
 class LLMGatewayRequest(BaseModel):
@@ -18,6 +45,9 @@ class LLMGatewayRequest(BaseModel):
     user_prompt: str = Field(default="")
     output_schema: dict[str, Any] | None = None
     temperature: float = Field(default=0.7, ge=0, le=2)
+    max_tokens: int | None = Field(default=None, ge=1, le=128000)
+    web_search: bool = False
+    web_search_context_size: str = Field(default="medium", pattern="^(low|medium|high)$")
     metadata: dict[str, Any] = Field(default_factory=dict)
 
 
@@ -28,18 +58,10 @@ class LLMGatewayResponse(BaseModel):
     content: str
     data: Any = Field(default_factory=dict)
     usage: dict[str, Any] = Field(default_factory=dict)
+    sources: list[dict[str, Any]] = Field(default_factory=list)
     latency_ms: int
     error: str | None = None
     generation_record_id: int | None = None
-
-
-class RuntimeProviderConfig(BaseModel):
-    source: str = "environment"
-    provider: str
-    base_url: str = ""
-    api_key: str = ""
-    model: str = ""
-    config: dict[str, Any] = Field(default_factory=dict)
 
 
 class LLMGateway:
@@ -54,19 +76,20 @@ class LLMGateway:
         user_id: int | None = None,
         prompt_version: str | None = "v1",
     ) -> LLMGatewayResponse:
-        runtime_provider = self._resolve_chat_provider(db)
-        provider = runtime_provider.provider.strip().lower().replace("-", "_")
+        provider = self._normalized_provider()
 
         if provider == "mock":
-            result = self._generate_mock(request, runtime_provider)
-        elif provider == "openai_compatible":
-            result = self._generate_openai_compatible(request, runtime_provider)
+            result = self._generate_mock(request)
+        elif provider in {"openai_compatible", "dataeye", "moyu"}:
+            result = self._generate_openai_compatible(request, provider=provider)
+        elif provider == "anthropic_compatible":
+            result = self._generate_anthropic_compatible(request)
         else:
             result = self._error_response(
                 provider=provider or "unknown",
-                model=runtime_provider.model or self.settings.llm_model,
+                model=self.settings.llm_model,
                 started_at=time.perf_counter(),
-                error=f"Unsupported chat provider: {runtime_provider.provider}",
+                error=f"Unsupported LLM_PROVIDER: {self.settings.llm_provider}",
             )
 
         record = create_generation_record(
@@ -92,39 +115,17 @@ class LLMGateway:
         result.generation_record_id = record.id
         return result
 
-    def _resolve_chat_provider(self, db: Session) -> RuntimeProviderConfig:
-        provider_config = get_default_gateway_provider(db, "chat")
-        if provider_config is not None:
-            return RuntimeProviderConfig(
-                source="database",
-                provider=provider_config.provider,
-                base_url=provider_config.base_url or "",
-                api_key=provider_config.api_key or "",
-                model=provider_config.model,
-                config=provider_config.config or {},
-            )
-
-        return RuntimeProviderConfig(
-            source="environment",
-            provider=self.settings.llm_provider,
-            base_url=self.settings.llm_base_url,
-            api_key=self.settings.llm_api_key,
-            model=self.settings.llm_model,
-            config={},
-        )
-
-    def _generate_mock(
-        self,
-        request: LLMGatewayRequest,
-        runtime_provider: RuntimeProviderConfig,
-    ) -> LLMGatewayResponse:
+    def _generate_mock(self, request: LLMGatewayRequest) -> LLMGatewayResponse:
         started_at = time.perf_counter()
         data = self._mock_data_for_module(request.module_name, request.metadata)
         content = json.dumps(data, ensure_ascii=False, indent=2)
+        sources = []
+        if request.web_search:
+            sources = [{"title": "Mock Search Source", "url": "https://example.com/mock-search"}]
         return LLMGatewayResponse(
             success=True,
             provider="mock",
-            model=runtime_provider.model or self.settings.llm_model or "mock-model",
+            model=self.settings.llm_model or "mock-model",
             content=content,
             data=data,
             usage={
@@ -132,56 +133,59 @@ class LLMGateway:
                 "completion_tokens": 0,
                 "total_tokens": 0,
             },
+            sources=sources,
             latency_ms=self._elapsed_ms(started_at),
         )
 
     def _generate_openai_compatible(
         self,
         request: LLMGatewayRequest,
-        runtime_provider: RuntimeProviderConfig,
+        provider: str = "openai_compatible",
     ) -> LLMGatewayResponse:
         started_at = time.perf_counter()
-        provider = "openai_compatible"
-        model = runtime_provider.model or self.settings.llm_model
-        base_url = runtime_provider.base_url.strip()
-        timeout_seconds = float(
-            runtime_provider.config.get("timeout_seconds") or self.settings.llm_timeout_seconds
-        )
+        base_url = self._web_search_base_url(provider) if request.web_search else self._openai_compatible_base_url(provider)
+        model = self._web_search_model(request, base_url) if request.web_search else self._openai_compatible_model(request, base_url)
 
         if not base_url:
             return self._error_response(
                 provider=provider,
                 model=model,
                 started_at=started_at,
-                error="LLM_BASE_URL is required when LLM_PROVIDER=openai_compatible",
+                error=f"LLM_BASE_URL is required when LLM_PROVIDER={provider}",
+            )
+
+        if request.web_search:
+            return self._generate_openai_responses_with_web_search(
+                request=request,
+                provider=provider,
+                started_at=started_at,
+                base_url=base_url,
+                model=model,
             )
 
         url = self._chat_completions_url(base_url)
         headers = {"Content-Type": "application/json"}
-        if runtime_provider.api_key:
-            headers["Authorization"] = f"Bearer {runtime_provider.api_key}"
-        extra_headers = runtime_provider.config.get("headers")
-        if isinstance(extra_headers, dict):
-            headers.update({str(key): str(value) for key, value in extra_headers.items()})
+        if self.settings.llm_api_key:
+            headers["Authorization"] = f"Bearer {self.settings.llm_api_key}"
 
         payload: dict[str, Any] = {
             "model": model,
+            "max_tokens": request.max_tokens or self.settings.llm_max_tokens_default,
             "messages": [
                 {"role": "system", "content": request.system_prompt},
                 {"role": "user", "content": request.user_prompt},
             ],
             "temperature": request.temperature,
         }
-        extra_payload = runtime_provider.config.get("payload")
-        if isinstance(extra_payload, dict):
-            payload.update(extra_payload)
+        if self._is_deepseek_endpoint(base_url, model):
+            payload.update(self._deepseek_openai_options(request, model))
 
         try:
-            response = httpx.post(
+            response = _post_json(
                 url,
                 headers=headers,
                 json=payload,
-                timeout=timeout_seconds,
+                timeout=self.settings.llm_timeout_seconds,
             )
             response.raise_for_status()
             body = response.json()
@@ -202,7 +206,194 @@ class LLMGateway:
                 provider=provider,
                 model=model,
                 started_at=started_at,
-                error=f"LLM request timed out after {timeout_seconds} seconds: {exc}",
+                error=f"LLM request timed out after {self.settings.llm_timeout_seconds} seconds: {exc}",
+            )
+        except httpx.HTTPStatusError as exc:
+            response_text = exc.response.text[:500] if exc.response is not None else ""
+            return self._error_response(
+                provider=provider,
+                model=model,
+                started_at=started_at,
+                error=f"LLM HTTP error {exc.response.status_code}: {response_text}",
+            )
+        except httpx.RequestError as exc:
+            return self._error_response(
+                provider=provider,
+                model=model,
+                started_at=started_at,
+                error=f"LLM request failed: {exc}",
+            )
+        except ValueError as exc:
+            return self._error_response(
+                provider=provider,
+                model=model,
+                started_at=started_at,
+                error=f"LLM response parse failed: {exc}",
+            )
+        except Exception as exc:
+            return self._error_response(
+                provider=provider,
+                model=model,
+                started_at=started_at,
+                error=str(exc),
+            )
+
+    def _generate_openai_responses_with_web_search(
+        self,
+        *,
+        request: LLMGatewayRequest,
+        provider: str,
+        started_at: float,
+        base_url: str,
+        model: str,
+    ) -> LLMGatewayResponse:
+        url = self._responses_url(base_url)
+        headers = {"Content-Type": "application/json"}
+        api_key = self.settings.web_search_api_key.strip() or self.settings.llm_api_key
+        if api_key:
+            headers["Authorization"] = f"Bearer {api_key}"
+
+        context_size = request.web_search_context_size or self.settings.web_search_context_size
+        if context_size not in {"low", "medium", "high"}:
+            context_size = "medium"
+
+        payload: dict[str, Any] = {
+            "model": model,
+            "instructions": request.system_prompt,
+            "input": [
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "input_text", "text": request.user_prompt},
+                    ],
+                }
+            ],
+            "tools": [{"type": "web_search", "search_context_size": context_size}],
+            "tool_choice": "auto",
+            "include": ["web_search_call.action.sources"],
+        }
+
+        try:
+            response = _post_json(
+                url,
+                headers=headers,
+                json=payload,
+                timeout=self.settings.llm_timeout_seconds,
+            )
+            response.raise_for_status()
+            body = self._decode_responses_body(response)
+            content = self._extract_responses_content(body)
+            sources = self._extract_responses_sources(body)
+            data = self._parse_json_content(content)
+            if isinstance(data, dict):
+                data.setdefault("sources", sources)
+
+            return LLMGatewayResponse(
+                success=True,
+                provider=provider,
+                model=body.get("model") or model,
+                content=content,
+                data=data,
+                usage=body.get("usage") or {},
+                sources=sources,
+                latency_ms=self._elapsed_ms(started_at),
+            )
+        except httpx.TimeoutException as exc:
+            return self._error_response(
+                provider=provider,
+                model=model,
+                started_at=started_at,
+                error=f"LLM web search timed out after {self.settings.llm_timeout_seconds} seconds: {exc}",
+            )
+        except httpx.HTTPStatusError as exc:
+            response_text = exc.response.text[:500] if exc.response is not None else ""
+            return self._error_response(
+                provider=provider,
+                model=model,
+                started_at=started_at,
+                error=f"LLM web search HTTP error {exc.response.status_code}: {response_text}",
+            )
+        except httpx.RequestError as exc:
+            return self._error_response(
+                provider=provider,
+                model=model,
+                started_at=started_at,
+                error=f"LLM web search request failed: {exc}",
+            )
+        except ValueError as exc:
+            return self._error_response(
+                provider=provider,
+                model=model,
+                started_at=started_at,
+                error=f"LLM web search response parse failed: {exc}",
+            )
+        except Exception as exc:
+            return self._error_response(
+                provider=provider,
+                model=model,
+                started_at=started_at,
+                error=str(exc),
+            )
+
+    def _generate_anthropic_compatible(self, request: LLMGatewayRequest) -> LLMGatewayResponse:
+        started_at = time.perf_counter()
+        provider = "anthropic_compatible"
+        model = self.settings.llm_model
+        base_url = self.settings.llm_base_url.strip()
+
+        if not base_url:
+            return self._error_response(
+                provider=provider,
+                model=model,
+                started_at=started_at,
+                error="LLM_BASE_URL is required when LLM_PROVIDER=anthropic_compatible",
+            )
+
+        url = self._anthropic_messages_url(base_url)
+        headers = {
+            "Content-Type": "application/json",
+            "anthropic-version": "2023-06-01",
+        }
+        if self.settings.llm_api_key:
+            headers["x-api-key"] = self.settings.llm_api_key
+
+        payload: dict[str, Any] = {
+            "model": model,
+            "max_tokens": request.max_tokens or self.settings.llm_max_tokens_default,
+            "messages": [{"role": "user", "content": request.user_prompt}],
+            "temperature": request.temperature,
+        }
+        payload["thinking"] = {"type": "disabled"}
+        if request.system_prompt:
+            payload["system"] = request.system_prompt
+
+        try:
+            response = _post_json(
+                url,
+                headers=headers,
+                json=payload,
+                timeout=self.settings.llm_timeout_seconds,
+            )
+            response.raise_for_status()
+            body = response.json()
+            content = self._extract_anthropic_content(body)
+            data = self._parse_json_content(content)
+
+            return LLMGatewayResponse(
+                success=True,
+                provider=provider,
+                model=body.get("model") or model,
+                content=content,
+                data=data,
+                usage=self._normalize_anthropic_usage(body.get("usage") or {}),
+                latency_ms=self._elapsed_ms(started_at),
+            )
+        except httpx.TimeoutException as exc:
+            return self._error_response(
+                provider=provider,
+                model=model,
+                started_at=started_at,
+                error=f"LLM request timed out after {self.settings.llm_timeout_seconds} seconds: {exc}",
             )
         except httpx.HTTPStatusError as exc:
             response_text = exc.response.text[:500] if exc.response is not None else ""
@@ -240,6 +431,11 @@ class LLMGateway:
         metadata: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         normalized = module_name.lower().replace("-", "_")
+        if normalized == "strategy_bundle":
+            return {
+                "account_package": self._mock_account_package(),
+                "execution_plan": self._mock_execution_plan(metadata or {}),
+            }
         if "account" in normalized or "package" in normalized or "账号" in normalized:
             return self._mock_account_package()
         if "execution" in normalized or "plan" in normalized or "执行" in normalized:
@@ -248,12 +444,58 @@ class LLMGateway:
             return self._mock_topics(metadata or {})
         if "script" in normalized or "copy" in normalized or "文案" in normalized:
             return self._mock_script(metadata or {})
+        if normalized == "hot_video_search":
+            return self._mock_hot_video_search(metadata or {})
+        if normalized == "image_prompt_enhance":
+            return {
+                "enhanced_prompt": "画面主体必须是满绿镶嵌戒面，生成高级清透的珠宝产品展示图，主体居中清晰，柔和自然光，背景干净留白，突出翡翠的通透感、饱满色泽、镶嵌工艺和真实材质纹理。避免乱码文字、可识别人脸、项目名图形化、夸张特效、假绿、塑料感和廉价反光。",
+                "subject": "满绿镶嵌戒面",
+                "removed_terms": metadata.get("interference_terms", []) if metadata else [],
+                "notes": ["已过滤项目名、人名和昵称", "已将主体绑定到产品字段"],
+            }
+        if normalized == "ai_chat":
+            return {
+                "reply": "可以。先把目标账号、人设和产品卖点收紧，再按选题、文案、提示词三个层级推进；如果要继续落地，建议先进入项目档案确认基础信息。",
+            }
 
         return {
             "module_name": module_name,
             "summary": "mock provider 示例输出",
             "next_step": "请使用 account_package、execution_plan、topics 或 script 模块名测试固定 JSON。",
         }
+
+    def _mock_hot_video_search(self, metadata: dict[str, Any] | None = None) -> dict[str, Any]:
+        metadata = metadata or {}
+        platform = str(metadata.get("platform") or "抖音")
+        keyword = str(metadata.get("keyword") or "翡翠避坑")
+        count = int(metadata.get("count") or 3)
+        templates = [
+            ("先别问价格，新手买翡翠先看这三处", "用反常识开头拦住新手焦虑"),
+            ("四会档口实拍：同样绿色为什么差价这么大", "用真实场景和强对比制造停留"),
+            ("客户预算一万，我会先劝她放弃这类货", "用客户故事制造信任和转化"),
+        ]
+        items = []
+        for index in range(count):
+            title, reason = templates[index % len(templates)]
+            items.append(
+                {
+                    "title": f"{keyword}｜{title}",
+                    "platform": platform,
+                    "creator": "",
+                    "source_url": "https://example.com/hot-video",
+                    "source_title": "Mock 热门视频搜索结果",
+                    "publish_time": "",
+                    "metrics": {"status": "mock"},
+                    "why_trending": reason,
+                    "hook": "新手买翡翠，别一上来就问最低价。",
+                    "structure": ["一句话打破误区", "展示真实货品细节", "解释判断标准", "给出私信承接动作"],
+                    "remake_angle": "结合项目产品，用自己的货品和客户场景重写，不照搬原视频表达。",
+                    "rewrite_brief": "生成一条 60 秒短视频文案：开头反常识，正文讲三步判断，结尾引导评论预算。",
+                    "risk_notes": ["不要搬运原视频画面", "不要使用原作者口播原文"],
+                    "tags": ["翡翠", "避坑", "同赛道拆解"],
+                }
+            )
+        return {"items": items}
 
     def _mock_account_package(self) -> dict[str, Any]:
         return {
@@ -375,7 +617,29 @@ class LLMGateway:
         metadata = metadata or {}
         platform = str(metadata.get("platform") or "抖音")
         goal = str(metadata.get("goal") or "获客")
+        content_format = str(metadata.get("content_format") or "video")
         count = int(metadata.get("count") or 20)
+
+        # 口播专用话题型标题模板
+        spoken_templates = [
+            ("买手镯还是买挂件，今天我来告诉你", "选购对比", "很多人纠结买手镯还是挂件，其实要看你的佩戴场景和预算。"),
+            ("打麻将戴什么首饰最旺？", "风水话题", "打麻将戴翡翠有讲究，不同生肖适合不同款式。"),
+            ("12生肖都戴什么珠宝最合适？", "生肖话题", "每个生肖都有适合自己的珠宝，选对了更旺运势。"),
+            ("翡翠是智商税吗？", "争议话题", "有人说翡翠是智商税，今天聊聊我的真实看法。"),
+            ("几百块和几万块的翡翠，差别到底在哪？", "价格对比", "同样是翡翠，价格差几十倍，到底差在哪里？"),
+            ("新手买翡翠最容易踩的5个坑", "避坑指南", "新手买翡翠，这几个坑踩了就亏大了。"),
+            ("为什么行家看翡翠先看瑕疵？", "行家视角", "普通人看颜色，行家先看瑕疵，这是为什么？"),
+            ("送长辈翡翠，选什么款式最合适？", "送礼话题", "送长辈翡翠有讲究，选错了反而尴尬。"),
+            ("翡翠手镯有裂纹还能买吗？", "瑕疵话题", "手镯有裂纹到底能不能买？今天说清楚。"),
+            ("直播间买翡翠，这3点一定要记住", "直播避坑", "直播间买翡翠水很深，记住这3点不踩坑。"),
+            ("戴翡翠有什么讲究？这5件事别做", "佩戴禁忌", "戴翡翠有些事不能做，老一辈说的有道理吗？"),
+            ("翡翠越戴越透是真的吗？", "养护话题", "有人说翡翠越戴越透，是真的还是心理作用？"),
+            ("预算3000，买手镯还是买吊坠？", "预算话题", "预算有限，手镯和吊坠哪个更值得买？"),
+            ("为什么有些翡翠越戴越绿？", "变色话题", "翡翠戴久了变色，是好事还是坏事？"),
+            ("四会市场买翡翠，这些话别信", "市场避坑", "四会市场水很深，商家说这些话时要多留心。"),
+        ]
+
+        # 视频/图片用的详细模板
         templates = [
             (
                 "四会源头市场同样叫冰种，价格为什么差这么多",
@@ -560,24 +824,53 @@ class LLMGateway:
         ]
 
         topics = []
-        for index in range(count):
-            title, content_type, pain, hook, shooting, conversion, score = templates[
-                index % len(templates)
-            ]
-            topics.append(
-                {
+        if content_format == "video_spoken":
+            # 口播使用专门的话题型模板
+            for index in range(count):
+                title, content_type, intro = spoken_templates[index % len(spoken_templates)]
+                topic = {
+                    "title": title if index < len(spoken_templates) else f"{title}（第 {index + 1} 期）",
+                    "platform": platform,
+                    "content_type": content_type,
+                    "goal": goal,
+                    "score": 90 + (index % 7),
+                    "spoken_script": (
+                        f"大家好，今天我们来聊一个话题：{title}。\n\n"
+                        f"{intro}\n\n"
+                        f"我在四会源头市场多年，见过太多翠友在这个问题上纠结。"
+                        f"其实答案很简单——根据你的实际情况来选，适合自己的才是最好的。\n\n"
+                        f"如果你也有这方面的困惑，欢迎在评论区留言，或者私信我聊聊你的具体情况。"
+                    ),
+                }
+                topics.append(topic)
+        else:
+            # 视频/图片使用详细模板
+            for index in range(count):
+                title, content_type, pain, hook, shooting, conversion, score = templates[
+                    index % len(templates)
+                ]
+                topic = {
                     "title": title if index < len(templates) else f"{title}（第 {index + 1} 版）",
                     "platform": platform,
                     "content_type": content_type,
                     "goal": goal,
                     "selling_point": "四会源头市场真实看货、翡翠避坑和预算选品建议",
-                    "user_pain_point": pain,
-                    "hook": hook,
-                    "shooting_suggestion": shooting,
-                    "conversion_method": conversion,
                     "score": score,
                 }
-            )
+                if content_format in ("video", "video_script"):
+                    topic["user_pain_point"] = pain
+                    topic["hook"] = hook
+                    topic["shooting_suggestion"] = shooting
+                    topic["conversion_method"] = conversion
+                    topic["shooting_script"] = f"开场用这句话引出痛点：{hook} 随后按实物近景、自然光细节、对比说明和结尾承接四段拍摄。"
+                    topic["seedance_video_prompt"] = f"参考图为翡翠实物，生成短视频：真人在四会市场自然光环境中展示产品细节，主题是{title}，画面真实清透。"
+                elif content_format == "image":
+                    # 图片选题只需要 title，不需要其他字段
+                    pass
+                elif content_format == "image_to_image":
+                    # 图生图选题只需要 title
+                    pass
+                topics.append(topic)
 
         return {"topics": topics}
 
@@ -624,6 +917,110 @@ class LLMGateway:
             return cleaned
         return f"{cleaned}/chat/completions"
 
+    def _responses_url(self, base_url: str) -> str:
+        cleaned = self._prefer_https_for_public_url(self._strip_url_method_prefix(base_url).rstrip("/"))
+        if cleaned.endswith("/responses"):
+            return cleaned
+        if cleaned.endswith("/chat/completions"):
+            cleaned = cleaned[: -len("/chat/completions")]
+        return f"{cleaned}/responses"
+
+    def _prefer_https_for_public_url(self, value: str) -> str:
+        parsed = urlsplit(value)
+        if parsed.scheme.lower() != "http":
+            return value
+        hostname = (parsed.hostname or "").lower()
+        if (
+            hostname in {"localhost", "127.0.0.1", "0.0.0.0", "::1"}
+            or hostname.startswith("10.")
+            or hostname.startswith("192.168.")
+            or hostname.endswith(".local")
+        ):
+            return value
+        if hostname.startswith("172."):
+            parts = hostname.split(".")
+            if len(parts) > 1 and parts[1].isdigit() and 16 <= int(parts[1]) <= 31:
+                return value
+        return urlunsplit(("https", parsed.netloc, parsed.path, parsed.query, parsed.fragment))
+
+    def _openai_compatible_base_url(self, provider: str) -> str:
+        base_url = self._strip_url_method_prefix(self.settings.llm_base_url).rstrip("/")
+        if provider != "dataeye" or not base_url:
+            return base_url
+        if base_url.endswith("/v1") or base_url.endswith("/chat/completions"):
+            return base_url
+        return f"{base_url}/v1"
+
+    def _web_search_base_url(self, provider: str) -> str:
+        override = self._strip_url_method_prefix(self.settings.web_search_base_url).rstrip("/")
+        if override:
+            return override
+        return self._openai_compatible_base_url(provider)
+
+    def _strip_url_method_prefix(self, value: str) -> str:
+        cleaned = value.strip()
+        parts = cleaned.split(maxsplit=1)
+        if len(parts) == 2 and parts[0].upper() in {"GET", "POST", "PUT", "PATCH", "DELETE"}:
+            return parts[1].strip()
+        return cleaned
+
+    def _anthropic_messages_url(self, base_url: str) -> str:
+        cleaned = base_url.rstrip("/")
+        if cleaned.endswith("/v1/messages") or cleaned.endswith("/messages"):
+            return cleaned
+        return f"{cleaned}/v1/messages"
+
+    def _is_deepseek_endpoint(self, base_url: str, model: str) -> bool:
+        return "deepseek" in base_url.lower() or "deepseek" in model.lower()
+
+    def _openai_compatible_model(self, request: LLMGatewayRequest, base_url: str) -> str:
+        module_name = request.module_name.lower().replace("-", "_")
+        module_override = self._module_model_override(module_name)
+        if module_override:
+            return module_override
+
+        if not self._is_deepseek_endpoint(base_url, self.settings.llm_model):
+            return self.settings.llm_model
+
+        if module_name == "topics":
+            return self.settings.deepseek_topics_model
+        if module_name == "account_package":
+            return self.settings.deepseek_account_package_model
+        return self.settings.llm_model
+
+    def _web_search_model(self, request: LLMGatewayRequest, base_url: str) -> str:
+        override = self.settings.web_search_model.strip()
+        if override:
+            return override
+        return self._openai_compatible_model(request, base_url)
+
+    def _module_model_override(self, module_name: str) -> str:
+        if module_name == "account_package":
+            return self.settings.account_package_model.strip()
+        if module_name == "execution_plan":
+            return self.settings.execution_plan_model.strip()
+        return ""
+
+    def _normalized_provider(self) -> str:
+        provider = self.settings.llm_provider.strip().lower().replace("-", "_")
+        if provider == "gpt_api":
+            return "openai_compatible"
+        return provider
+
+    def _deepseek_openai_options(self, request: LLMGatewayRequest, model: str) -> dict[str, Any]:
+        if "deepseek" not in model.lower():
+            return {}
+        if "flash" in model.lower():
+            return {}
+
+        module_name = request.module_name.lower().replace("-", "_")
+        if module_name == "account_package":
+            return {
+                "thinking": {"type": "enabled"},
+                "reasoning_effort": "max",
+            }
+        return {"thinking": {"type": "disabled"}}
+
     def _extract_openai_content(self, body: dict[str, Any]) -> str:
         choices = body.get("choices") or []
         if not choices:
@@ -634,6 +1031,132 @@ class LLMGateway:
         if isinstance(content, str):
             return content
         return json.dumps(content, ensure_ascii=False)
+
+    def _extract_responses_content(self, body: dict[str, Any]) -> str:
+        output_text = body.get("output_text")
+        if isinstance(output_text, str):
+            return output_text
+
+        parts: list[str] = []
+        for output_item in body.get("output") or []:
+            if not isinstance(output_item, dict):
+                continue
+            for content_item in output_item.get("content") or []:
+                if isinstance(content_item, str):
+                    parts.append(content_item)
+                    continue
+                if not isinstance(content_item, dict):
+                    continue
+                text = content_item.get("text") or content_item.get("content")
+                if isinstance(text, str):
+                    parts.append(text)
+        return "\n".join(parts).strip()
+
+    def _decode_responses_body(self, response: httpx.Response) -> dict[str, Any]:
+        content_type = response.headers.get("content-type", "")
+        text = response.text
+        if "text/event-stream" in content_type.lower() or text.lstrip().startswith(("event:", "data:")):
+            return self._parse_responses_event_stream(text)
+        body = response.json()
+        if not isinstance(body, dict):
+            raise ValueError("Responses API returned non-object JSON")
+        return body
+
+    def _parse_responses_event_stream(self, text: str) -> dict[str, Any]:
+        events: list[dict[str, Any]] = []
+        data_lines: list[str] = []
+
+        def flush_event() -> None:
+            if not data_lines:
+                return
+            raw_data = "\n".join(data_lines).strip()
+            data_lines.clear()
+            if not raw_data or raw_data == "[DONE]":
+                return
+            payload = json.loads(raw_data)
+            if isinstance(payload, dict):
+                events.append(payload)
+
+        for raw_line in text.splitlines():
+            line = raw_line.rstrip("\r")
+            if not line:
+                flush_event()
+                continue
+            if line.startswith("data:"):
+                data_lines.append(line[5:].lstrip())
+        flush_event()
+
+        for event in reversed(events):
+            if event.get("type") == "response.completed" and isinstance(event.get("response"), dict):
+                return event["response"]
+
+        text_parts = [
+            event["text"]
+            for event in events
+            if event.get("type") == "response.output_text.done" and isinstance(event.get("text"), str)
+        ]
+        if text_parts:
+            return {"output_text": "\n".join(text_parts), "output": [], "usage": {}}
+        raise ValueError("Responses API event stream did not include a completed response")
+
+    def _extract_responses_sources(self, body: dict[str, Any]) -> list[dict[str, Any]]:
+        sources: list[dict[str, Any]] = []
+
+        def add_source(value: dict[str, Any]) -> None:
+            url = value.get("url")
+            if not isinstance(url, str) or not url.strip():
+                return
+            if any(source.get("url") == url for source in sources):
+                return
+            title = value.get("title")
+            sources.append(
+                {
+                    "url": url,
+                    "title": title if isinstance(title, str) and title.strip() else url,
+                }
+            )
+
+        for output_item in body.get("output") or []:
+            if not isinstance(output_item, dict):
+                continue
+            action = output_item.get("action")
+            if isinstance(action, dict):
+                for source in action.get("sources") or []:
+                    if isinstance(source, dict):
+                        add_source(source)
+            for content_item in output_item.get("content") or []:
+                if not isinstance(content_item, dict):
+                    continue
+                for annotation in content_item.get("annotations") or []:
+                    if isinstance(annotation, dict):
+                        add_source(annotation)
+        return sources
+
+    def _extract_anthropic_content(self, body: dict[str, Any]) -> str:
+        content = body.get("content") or []
+        if isinstance(content, str):
+            return content
+        if not isinstance(content, list):
+            return json.dumps(content, ensure_ascii=False)
+
+        parts = []
+        for item in content:
+            if isinstance(item, str):
+                parts.append(item)
+            elif isinstance(item, dict):
+                text = item.get("text")
+                if isinstance(text, str):
+                    parts.append(text)
+        return "\n".join(parts)
+
+    def _normalize_anthropic_usage(self, usage: dict[str, Any]) -> dict[str, Any]:
+        normalized = dict(usage)
+        input_tokens = normalized.get("input_tokens", 0) or 0
+        output_tokens = normalized.get("output_tokens", 0) or 0
+        normalized["prompt_tokens"] = input_tokens
+        normalized["completion_tokens"] = output_tokens
+        normalized["total_tokens"] = input_tokens + output_tokens
+        return normalized
 
     def _parse_json_content(self, content: str) -> Any:
         if not content:
@@ -648,7 +1171,11 @@ class LLMGateway:
                 try:
                     return json.loads(extracted)
                 except json.JSONDecodeError:
-                    pass
+                    repaired = self._repair_unescaped_inner_quotes(extracted)
+                    try:
+                        return json.loads(repaired)
+                    except json.JSONDecodeError:
+                        pass
             return {"text": content}
 
     def _strip_markdown_json_fence(self, content: str) -> str:
@@ -696,6 +1223,46 @@ class LLMGateway:
 
         return None
 
+    def _repair_unescaped_inner_quotes(self, content: str) -> str:
+        repaired = []
+        in_string = False
+        escaped = False
+
+        for index, char in enumerate(content):
+            if escaped:
+                repaired.append(char)
+                escaped = False
+                continue
+
+            if char == "\\":
+                repaired.append(char)
+                escaped = in_string
+                continue
+
+            if char == '"':
+                if not in_string:
+                    in_string = True
+                    repaired.append(char)
+                    continue
+
+                next_non_space = self._next_non_space(content, index + 1)
+                if next_non_space in {":", ",", "]", "}", None}:
+                    in_string = False
+                    repaired.append(char)
+                else:
+                    repaired.append('\\"')
+                continue
+
+            repaired.append(char)
+
+        return "".join(repaired)
+
+    def _next_non_space(self, content: str, start: int) -> str | None:
+        for char in content[start:]:
+            if not char.isspace():
+                return char
+        return None
+
     def _error_response(
         self,
         provider: str,
@@ -710,6 +1277,7 @@ class LLMGateway:
             content="",
             data={},
             usage={},
+            sources=[],
             latency_ms=self._elapsed_ms(started_at),
             error=error,
         )

@@ -4,11 +4,14 @@ from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
+from app.api.dependencies import get_current_user
 from app.db.session import get_db
 from app.llm.llm_gateway import LLMGateway, LLMGatewayRequest
+from app.models.user import User
 
 
 router = APIRouter(prefix="/api/llm", tags=["llm-test"])
+__test__ = False
 
 
 class LLMTestGenerateRequest(BaseModel):
@@ -26,11 +29,13 @@ class LLMTestGenerateRequest(BaseModel):
 def test_generate(
     payload: LLMTestGenerateRequest,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ) -> dict[str, Any]:
     gateway = LLMGateway()
     result = gateway.generate(
         db=db,
         project_id=payload.project_id,
+        user_id=current_user.id,
         prompt_version=payload.prompt_version,
         request=LLMGatewayRequest(
             module_name=payload.module_name,

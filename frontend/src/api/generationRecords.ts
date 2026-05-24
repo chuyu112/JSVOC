@@ -1,6 +1,11 @@
 import { apiClient, type ApiResponse } from './client'
 
-export type GenerationModuleName = 'account_package' | 'execution_plan' | 'topics' | 'script'
+export type GenerationModuleName =
+  | 'account_package'
+  | 'execution_plan'
+  | 'strategy_bundle'
+  | 'topics'
+  | 'script'
 
 export interface GenerationRecord {
   id: number
@@ -27,6 +32,7 @@ export interface GenerationRecordQuery {
 export const moduleNameText: Record<GenerationModuleName, string> = {
   account_package: '账号包装',
   execution_plan: '执行计划',
+  strategy_bundle: '账号包装+执行计划',
   topics: '选题生成',
   script: '文案生成',
 }
@@ -42,8 +48,8 @@ export async function listGenerationRecords(
     '/api/generation-records',
     {
       params: {
-        project_id: query.project_id || undefined,
-        module_name: query.module_name || undefined,
+        project_id: query.project_id ?? undefined,
+        module_name: query.module_name ?? undefined,
         limit: query.limit ?? 50,
         offset: query.offset ?? 0,
       },
