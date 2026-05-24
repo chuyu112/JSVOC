@@ -7,6 +7,11 @@ export interface ApiResponse<T> {
   message: string;
 }
 
+export interface RequestOptions {
+  timeoutMs?: number;
+  redirectOnUnauthorized?: boolean;
+}
+
 function stringifyValidationDetail(detail: unknown): string | null {
   if (typeof detail === "string") return detail;
   if (!Array.isArray(detail)) return null;
@@ -64,27 +69,53 @@ async function extractApiErrorMessage(response: Response, fallback: string): Pro
   }
 }
 
+function isAbortError(error: unknown): boolean {
+  return (
+    error instanceof Error &&
+    (error.name === "AbortError" || error.message.includes("aborted"))
+  );
+}
+
 async function request<T>(
   method: string,
   url: string,
   body?: unknown,
+  options: RequestOptions = {},
 ): Promise<T> {
   const fullUrl = url.startsWith("http") ? url : `${API_BASE_URL}${url}`;
   const headers: Record<string, string> = {
     Accept: "application/json",
     "Content-Type": "application/json",
   };
+  const timeoutMs = options.timeoutMs ?? (method === "GET" ? 15000 : undefined);
+  const controller = timeoutMs && timeoutMs > 0 ? new AbortController() : null;
+  let timeoutId: ReturnType<typeof setTimeout> | null = null;
 
-  const response = await fetch(fullUrl, {
-    method,
-    headers,
-    body: body ? JSON.stringify(body) : undefined,
-    credentials: "include",
-  });
+  let response: Response;
+  try {
+    if (controller && timeoutMs) {
+      timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+    }
+
+    response = await fetch(fullUrl, {
+      method,
+      headers,
+      body: body ? JSON.stringify(body) : undefined,
+      credentials: "include",
+      signal: controller?.signal,
+    });
+  } catch (error) {
+    if (isAbortError(error)) {
+      throw new Error("请求超时，请稍后重试");
+    }
+    throw error;
+  } finally {
+    if (timeoutId) clearTimeout(timeoutId);
+  }
 
   if (response.status === 401) {
     const message = await extractApiErrorMessage(response, "Unauthorized");
-    if (typeof window !== "undefined") {
+    if (options.redirectOnUnauthorized !== false && typeof window !== "undefined") {
       const current = window.location.pathname;
       if (!current.startsWith("/login")) {
         const redirect =
@@ -110,9 +141,12 @@ async function request<T>(
 }
 
 export const api = {
-  get: <T>(url: string) => request<T>("GET", url),
-  post: <T>(url: string, body?: unknown) => request<T>("POST", url, body),
-  put: <T>(url: string, body?: unknown) => request<T>("PUT", url, body),
-  patch: <T>(url: string, body?: unknown) => request<T>("PATCH", url, body),
-  delete: <T>(url: string) => request<T>("DELETE", url),
+  get: <T>(url: string, options?: RequestOptions) => request<T>("GET", url, undefined, options),
+  post: <T>(url: string, body?: unknown, options?: RequestOptions) =>
+    request<T>("POST", url, body, options),
+  put: <T>(url: string, body?: unknown, options?: RequestOptions) =>
+    request<T>("PUT", url, body, options),
+  patch: <T>(url: string, body?: unknown, options?: RequestOptions) =>
+    request<T>("PATCH", url, body, options),
+  delete: <T>(url: string, options?: RequestOptions) => request<T>("DELETE", url, undefined, options),
 };

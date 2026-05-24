@@ -27,17 +27,20 @@ export interface RegisterPayload {
 }
 
 export async function getCurrentUser(): Promise<AuthSession> {
-  return api.get<AuthSession>("/api/auth/me");
+  return api.get<AuthSession>("/api/auth/me", {
+    timeoutMs: 5000,
+    redirectOnUnauthorized: false,
+  });
 }
 
 export async function login(payload: LoginPayload): Promise<AuthSession> {
-  return api.post<AuthSession>("/api/auth/login", payload);
+  return api.post<AuthSession>("/api/auth/login", payload, { timeoutMs: 15000 });
 }
 
 export async function register(payload: RegisterPayload): Promise<AuthSession> {
-  return api.post<AuthSession>("/api/auth/register", payload);
+  return api.post<AuthSession>("/api/auth/register", payload, { timeoutMs: 15000 });
 }
 
 export async function logout(): Promise<void> {
-  await api.post("/api/auth/logout");
+  await api.post("/api/auth/logout", undefined, { timeoutMs: 10000 });
 }
