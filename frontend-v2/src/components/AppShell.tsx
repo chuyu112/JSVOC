@@ -146,6 +146,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   }, [auth.isAuthenticated, pathname]);
 
   const isLoginPage = pathname === "/login";
+  const showPrivateShell = auth.isAuthenticated || (!auth.checked && !isLoginPage);
   const latestFailedTask = recentTasks.find((task) => task.status === "failed" && task.error_message);
 
   return (
@@ -155,7 +156,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
           <div className="app-header-row flex items-center justify-between gap-5 w-[min(1400px,100%)] min-h-[60px]">
             <Brand />
 
-            {auth.isAuthenticated && (
+            {showPrivateShell && (
               <nav className="app-desktop-nav hidden min-w-0 flex-wrap justify-center md:inline-flex items-center gap-[6px] p-0 border-0 bg-transparent text-[#7a8a82] text-[14px] font-medium">
                 {globalNavItems.map((item) => (
                   <NavLink
@@ -219,7 +220,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         </header>
       )}
 
-      {!isLoginPage && auth.isAuthenticated && (
+      {!isLoginPage && showPrivateShell && (
         <>
           <details className="mobile-side-drawer mobile-side-drawer-left md:hidden">
             <summary className="mobile-side-trigger" aria-label="打开导航">

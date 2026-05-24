@@ -11,9 +11,9 @@ export default function ClientLayout({
 }) {
   return (
     <AuthProvider>
-      <AuthGuard>
-        <AppShell>{children}</AppShell>
-      </AuthGuard>
+      <AppShell>
+        <AuthGuard>{children}</AuthGuard>
+      </AppShell>
     </AuthProvider>
   );
 }
