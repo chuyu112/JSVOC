@@ -1,3 +1,4 @@
+import logging
 from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import select
@@ -6,6 +7,9 @@ from sqlalchemy.orm import Session
 from app.core.datetime_utils import utcnow_naive
 from app.models.generation_task import GenerationTask
 from app.schemas.generation_task import GenerationTaskCreate
+
+
+logger = logging.getLogger(__name__)
 
 
 def _utcnow() -> datetime:
@@ -153,4 +157,12 @@ def fail_stale_generation_tasks(
         task.completed_at = now
         task.updated_at = now
     db.commit()
+    from app.services.generation_record_service import create_generation_record_from_task
+
+    for task in tasks:
+        try:
+            create_generation_record_from_task(db, task)
+        except Exception:  # noqa: BLE001 - stale cleanup must not fail because history mirroring failed.
+            db.rollback()
+            logger.exception("stale generation task history persistence failed", extra={"task_id": task.id})
     return len(tasks)

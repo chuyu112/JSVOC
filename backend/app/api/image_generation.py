@@ -21,6 +21,7 @@ from app.schemas.image_generation import (
 from app.services import (
     credit_service,
     digital_asset_service,
+    generation_record_service,
     generation_task_service,
     image_prompt_enhancement_service,
     image_generation_service,
@@ -51,6 +52,14 @@ def image_generation_error_message(exc: Exception) -> str:
     if isinstance(exc, httpx.RequestError):
         return f"image generation provider request failed: {exc}"
     return f"image generation failed: {exc}"
+
+
+def maybe_create_generation_record_from_task(db: Session, task: Any) -> None:
+    try:
+        generation_record_service.create_generation_record_from_task(db, task)
+    except Exception:  # noqa: BLE001 - history persistence must not change task outcome.
+        db.rollback()
+        logger.exception("image generation history persistence failed", extra={"task_id": getattr(task, "id", None)})
 
 
 def extract_generated_image_content(image: GeneratedImage) -> tuple[bytes, str]:
@@ -158,12 +167,16 @@ def run_image_generation_task(task_id: int, mode: str, payload_data: dict[str, A
         if not result.images:
             raise RuntimeError("image provider returned no usable images")
         result = maybe_persist_generated_images_to_oss(db, payload_model, result, user_id=user_id)
-        generation_task_service.mark_generation_task_succeeded(db, task_id, result.model_dump(mode="json"))
+        task = generation_task_service.mark_generation_task_succeeded(db, task_id, result.model_dump(mode="json"))
+        if task is not None:
+            maybe_create_generation_record_from_task(db, task)
     except Exception as exc:  # noqa: BLE001 - background tasks must persist failures instead of raising.
         db.rollback()
         logger.warning("image generation task failed", extra={"task_id": task_id, "mode": mode, "error": str(exc)})
         try:
-            generation_task_service.mark_generation_task_failed(db, task_id, image_generation_error_message(exc))
+            task = generation_task_service.mark_generation_task_failed(db, task_id, image_generation_error_message(exc))
+            if task is not None:
+                maybe_create_generation_record_from_task(db, task)
             credit_service.refund_generation_task_credits(
                 db,
                 task_id,

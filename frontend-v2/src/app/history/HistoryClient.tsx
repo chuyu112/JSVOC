@@ -1,8 +1,13 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 import { motion } from "framer-motion";
-import { listGenerationRecords, formatModuleName, type GenerationRecord } from "@/lib/api/generationRecords";
+import {
+  getGenerationRecord,
+  listGenerationRecords,
+  formatModuleName,
+  type GenerationRecord,
+} from "@/lib/api/generationRecords";
 
 const moduleOptions = [
   { label: "全部模块", value: "" },
@@ -10,6 +15,9 @@ const moduleOptions = [
   { label: "执行计划", value: "execution_plan" },
   { label: "选题生成", value: "topics" },
   { label: "文案生成", value: "script" },
+  { label: "生图", value: "image_generate" },
+  { label: "图生图", value: "image_edit" },
+  { label: "生视频", value: "video_generate" },
   { label: "AI聊天", value: "ai_chat" },
 ];
 
@@ -48,8 +56,53 @@ function moduleTagClass(module: string) {
   if (module === "execution_plan") return "bg-[rgba(90,155,130,0.15)] text-[#4a856e]";
   if (module === "topics") return "bg-[rgba(249,115,22,0.15)] text-[#ea580c]";
   if (module === "script") return "bg-[rgba(14,165,233,0.15)] text-[#0284c7]";
+  if (module === "image_generate" || module === "image_edit") return "bg-[rgba(236,72,153,0.15)] text-[#ec4899]";
+  if (module === "video_generate") return "bg-[rgba(34,197,94,0.15)] text-[#22c55e]";
   if (module === "ai_chat") return "bg-[rgba(255,255,255,0.08)] text-[#f5f5f5]";
   return "bg-[rgba(255,255,255,0.06)] text-[#b0b0b0]";
+}
+
+function outputData(record: GenerationRecord): Record<string, unknown> {
+  return record.output_data && typeof record.output_data === "object" ? record.output_data : {};
+}
+
+function recordResult(record: GenerationRecord): "success" | "failed" | "unknown" {
+  const output = outputData(record);
+  const success = output.success;
+  const status = String(output.status || "").toLowerCase();
+  if (success === true || ["succeeded", "success", "completed"].includes(status)) return "success";
+  if (success === false || ["failed", "error", "cancelled", "canceled"].includes(status)) return "failed";
+  return "unknown";
+}
+
+function resultText(record: GenerationRecord) {
+  const result = recordResult(record);
+  if (result === "success") return "成功";
+  if (result === "failed") return "失败";
+  return "未知";
+}
+
+function resultTagClass(record: GenerationRecord) {
+  const result = recordResult(record);
+  if (result === "success") return "bg-[rgba(34,197,94,0.15)] text-[#22c55e]";
+  if (result === "failed") return "bg-[rgba(239,68,68,0.15)] text-[#ef4444]";
+  return "bg-[rgba(255,255,255,0.06)] text-[#9ca3af]";
+}
+
+function compactValue(value: unknown) {
+  if (value == null || value === "") return "";
+  if (typeof value === "string") return value;
+  try {
+    return JSON.stringify(value);
+  } catch {
+    return String(value);
+  }
+}
+
+function failureReason(record: GenerationRecord) {
+  const output = outputData(record);
+  const reason = compactValue(output.failure_reason || output.error);
+  return reason || "-";
 }
 
 function formatJson(value: unknown) {
@@ -94,7 +147,9 @@ export default function HistoryClient({ projectId }: { projectId?: number }) {
     if (detailById[record.id]) return;
     setDetailLoadingId(record.id);
     try {
-      // Reuse the list data as detail for now; individual GET endpoint exists if needed
+      const detail = await getGenerationRecord(record.id);
+      setDetailById((prev) => ({ ...prev, [record.id]: detail }));
+    } catch {
       setDetailById((prev) => ({ ...prev, [record.id]: record }));
     } finally {
       setDetailLoadingId(null);
@@ -192,6 +247,8 @@ export default function HistoryClient({ projectId }: { projectId?: number }) {
                   <th className="px-4 py-3 w-12">项目</th>
                   <th className="px-4 py-3 w-24">供应商</th>
                   <th className="px-4 py-3 w-28">模型</th>
+                  <th className="px-4 py-3 w-20">结果</th>
+                  <th className="px-4 py-3 min-w-40">失败原因</th>
                   <th className="px-4 py-3 w-20">耗时</th>
                   <th className="px-4 py-3 w-24">时间</th>
                   <th className="px-4 py-3 w-16">详情</th>
@@ -199,9 +256,8 @@ export default function HistoryClient({ projectId }: { projectId?: number }) {
               </thead>
               <tbody>
                 {records.map((record) => (
-                  <>
+                  <Fragment key={record.id}>
                     <tr
-                      key={record.id}
                       className="border-b border-[rgba(255,255,255,0.04)] hover:bg-[rgba(255,255,255,0.02)] transition-colors cursor-pointer"
                       onClick={() => loadDetail(record)}
                     >
@@ -214,8 +270,16 @@ export default function HistoryClient({ projectId }: { projectId?: number }) {
                       <td className="px-4 py-3 text-[#b0b0b0]">{record.project_id ?? "-"}</td>
                       <td className="px-4 py-3 text-[#b0b0b0]">{formatProvider(record.model_provider)}</td>
                       <td className="px-4 py-3 text-[#b0b0b0]">{formatModel(record.model_name)}</td>
+                      <td className="px-4 py-3">
+                        <span className={`tag text-xs ${resultTagClass(record)}`}>{resultText(record)}</span>
+                      </td>
+                      <td className="px-4 py-3 text-[#b0b0b0] max-w-[240px] truncate" title={failureReason(record)}>
+                        {failureReason(record)}
+                      </td>
                       <td className="px-4 py-3 text-[#b0b0b0]">{formatLatencySeconds(record.latency_ms)}</td>
-                      <td className="px-4 py-3 text-[#b0b0b0]">{formatCompactTime(record.created_at)}</td>
+                      <td className="px-4 py-3 text-[#b0b0b0]" title={formatTime(record.created_at)}>
+                        {formatCompactTime(record.created_at)}
+                      </td>
                       <td className="px-4 py-3">
                         <span className="text-[#5a9b82] text-xs">
                           {expandedId === record.id ? "收起" : "展开"}
@@ -224,7 +288,7 @@ export default function HistoryClient({ projectId }: { projectId?: number }) {
                     </tr>
                     {expandedId === record.id && (
                       <tr>
-                        <td colSpan={8} className="px-4 py-4">
+                        <td colSpan={10} className="px-4 py-4">
                           {detailLoadingId === record.id ? (
                             <div className="animate-pulse space-y-2">
                               <div className="h-4 bg-[rgba(255,255,255,0.06)] rounded w-1/3" />
@@ -256,6 +320,15 @@ export default function HistoryClient({ projectId }: { projectId?: number }) {
                                 </button>
                               </div>
                               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div className="history-detail-panel glass p-4 md:col-span-2">
+                                  <h4 className="text-[12px] text-[#9ca3af] mb-2">结果</h4>
+                                  <p className="text-[#b0b0b0]">
+                                    {resultText(detailById[record.id] || record)}
+                                    {recordResult(detailById[record.id] || record) === "failed"
+                                      ? `：${failureReason(detailById[record.id] || record)}`
+                                      : ""}
+                                  </p>
+                                </div>
                                 <div className="history-detail-panel glass p-4">
                                   <h4 className="text-[12px] text-[#9ca3af] mb-2">input_data</h4>
                                   <pre className="text-[12px] text-[#b0b0b0] whitespace-pre-wrap overflow-auto max-h-[300px]">
@@ -284,7 +357,7 @@ export default function HistoryClient({ projectId }: { projectId?: number }) {
                         </td>
                       </tr>
                     )}
-                  </>
+                  </Fragment>
                 ))}
               </tbody>
             </table>

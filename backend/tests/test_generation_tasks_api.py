@@ -18,6 +18,7 @@ from app.models import generation_task  # noqa: F401
 from app.models import project  # noqa: F401
 from app.models import user  # noqa: F401
 from app.models.digital_asset import DigitalAsset
+from app.models.generation_record import GenerationRecord
 from app.models.generation_task import GenerationTask
 from app.core.datetime_utils import utcnow_naive
 from app.services.generation_task_service import fail_stale_generation_tasks
@@ -170,6 +171,82 @@ class GenerationTasksApiTest(unittest.TestCase):
         self.assertIn("moderation_blocked", tasks[0]["error_message"])
         self.assertEqual(tasks[1]["status"], "succeeded")
         self.assertEqual(tasks[1]["result_data"]["video_url"], "https://example.test/video.mp4")
+
+    def test_completed_image_task_creates_success_generation_record(self) -> None:
+        from app.services.generation_record_service import create_generation_record_from_task
+
+        with self.SessionLocal() as db:
+            task = GenerationTask(
+                task_type="image_generate",
+                status="succeeded",
+                user_id=1,
+                project_id=7,
+                input_data={"prompt": "jade bracelet", "size": "1024x1024"},
+                result_data={
+                    "provider": "openai_compatible",
+                    "model": "gpt-image-2",
+                    "images": [{"url": "https://example.test/image.png"}],
+                    "usage": {"total_tokens": 12},
+                    "latency_ms": 456,
+                },
+                started_at=utcnow_naive() - timedelta(seconds=1),
+                completed_at=utcnow_naive(),
+            )
+            db.add(task)
+            db.commit()
+            db.refresh(task)
+
+            record = create_generation_record_from_task(db, task)
+            duplicate = create_generation_record_from_task(db, task)
+
+            self.assertEqual(record.id, duplicate.id)
+            self.assertEqual(record.module_name, "image_generate")
+            self.assertEqual(record.user_id, 1)
+            self.assertEqual(record.project_id, 7)
+            self.assertEqual(record.model_provider, "openai_compatible")
+            self.assertEqual(record.model_name, "gpt-image-2")
+            self.assertEqual(record.token_usage["total_tokens"], 12)
+            self.assertEqual(record.latency_ms, 456)
+            self.assertTrue(record.output_data["success"])
+            self.assertEqual(record.output_data["status"], "succeeded")
+            self.assertEqual(record.output_data["data"]["images"][0]["url"], "https://example.test/image.png")
+            self.assertEqual(record.input_data["metadata"]["generation_task_id"], task.id)
+
+            records = list(db.scalars(select(GenerationRecord)).all())
+            self.assertEqual(len(records), 1)
+
+    def test_failed_video_task_creates_generation_record_with_reason(self) -> None:
+        from app.services.generation_record_service import create_generation_record_from_task
+
+        with self.SessionLocal() as db:
+            task = GenerationTask(
+                task_type="video_generate",
+                status="failed",
+                user_id=1,
+                project_id=7,
+                input_data={
+                    "prompt": "jade bracelet video",
+                    "options": {"model": "seedance-test", "ratio": "9:16"},
+                },
+                result_data={"provider": "seedance", "model": "seedance-test", "task_id": "cgt-test-1"},
+                error_message="provider moderation blocked",
+                started_at=utcnow_naive() - timedelta(seconds=2),
+                completed_at=utcnow_naive(),
+            )
+            db.add(task)
+            db.commit()
+            db.refresh(task)
+
+            record = create_generation_record_from_task(db, task)
+
+            self.assertEqual(record.module_name, "video_generate")
+            self.assertEqual(record.model_provider, "seedance")
+            self.assertEqual(record.model_name, "seedance-test")
+            self.assertFalse(record.output_data["success"])
+            self.assertEqual(record.output_data["status"], "failed")
+            self.assertEqual(record.output_data["failure_reason"], "provider moderation blocked")
+            self.assertEqual(record.output_data["error"], "provider moderation blocked")
+            self.assertEqual(record.output_data["data"]["task_id"], "cgt-test-1")
 
     def test_generate_image_async_creates_task_and_schedules_background_work(self) -> None:
         scheduled = []

@@ -18,6 +18,7 @@ from app.schemas.generation_task import GenerationTaskCreate, GenerationTaskRead
 from app.services import (
     credit_service,
     digital_asset_service,
+    generation_record_service,
     generation_task_service,
     project_service,
     storage_service,
@@ -101,6 +102,14 @@ def video_generation_error_message(exc: Exception) -> str:
     if isinstance(exc, httpx.RequestError):
         return f"video generation provider request failed: {exc}"
     return f"video generation failed: {exc}"
+
+
+def maybe_create_generation_record_from_task(db: Session, task: GenerationTask) -> None:
+    try:
+        generation_record_service.create_generation_record_from_task(db, task)
+    except Exception:  # noqa: BLE001 - history persistence must not change task outcome.
+        db.rollback()
+        logger.exception("video generation history persistence failed", extra={"task_id": task.id})
 
 
 def extract_video_content(video_url: str) -> tuple[bytes, str]:
@@ -447,12 +456,16 @@ def run_video_generation_task(
         if not result.get("video_url"):
             raise RuntimeError("video provider returned no usable video")
         result = maybe_persist_video_to_oss(db, project_id, result, options, user_id=user_id)
-        generation_task_service.mark_generation_task_succeeded(db, task_id, result)
+        task = generation_task_service.mark_generation_task_succeeded(db, task_id, result)
+        if task is not None:
+            maybe_create_generation_record_from_task(db, task)
     except Exception as exc:  # noqa: BLE001 - background tasks must persist failures instead of raising.
         db.rollback()
         logger.warning("video generation task failed", extra={"task_id": task_id, "error": str(exc)})
         try:
-            generation_task_service.mark_generation_task_failed(db, task_id, video_generation_error_message(exc))
+            task = generation_task_service.mark_generation_task_failed(db, task_id, video_generation_error_message(exc))
+            if task is not None:
+                maybe_create_generation_record_from_task(db, task)
             credit_service.refund_generation_task_credits(
                 db,
                 task_id,
@@ -507,14 +520,18 @@ def recover_interrupted_video_generation_tasks() -> int:
                         options,
                         user_id=task.user_id,
                     )
-                    generation_task_service.mark_generation_task_succeeded(db, task.id, merged_result)
+                    updated_task = generation_task_service.mark_generation_task_succeeded(db, task.id, merged_result)
+                    if updated_task is not None:
+                        maybe_create_generation_record_from_task(db, updated_task)
                     recovered += 1
                 elif status_value in ("failed", "error", "cancelled"):
-                    generation_task_service.mark_generation_task_failed(
+                    updated_task = generation_task_service.mark_generation_task_failed(
                         db,
                         task.id,
                         str(provider_result.get("error_message") or "video provider task failed"),
                     )
+                    if updated_task is not None:
+                        maybe_create_generation_record_from_task(db, updated_task)
                     credit_service.refund_generation_task_credits(
                         db,
                         task.id,

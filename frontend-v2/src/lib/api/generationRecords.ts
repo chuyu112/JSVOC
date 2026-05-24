@@ -6,6 +6,9 @@ export type GenerationModuleName =
   | "strategy_bundle"
   | "topics"
   | "script"
+  | "image_generate"
+  | "image_edit"
+  | "video_generate"
   | "ai_chat";
 
 export interface GenerationRecord {
@@ -36,6 +39,9 @@ export const moduleNameText: Record<GenerationModuleName, string> = {
   strategy_bundle: "账号包装+执行计划",
   topics: "选题生成",
   script: "文案生成",
+  image_generate: "生图",
+  image_edit: "图生图",
+  video_generate: "生视频",
   ai_chat: "AI聊天",
 };
 

@@ -1,9 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
-import { getProject, updateProject, type Project, type ProjectPayload, type BenchmarkAccount } from "@/lib/api/projects";
+import { getProject, updateProject, type Project, type ProjectPayload } from "@/lib/api/projects";
 import { getLatestAccountPackage, generateAccountPackage, type AccountPackage } from "@/lib/api/generationRecords";
 
 const workflowNavGroups = [
@@ -136,9 +137,9 @@ export default function ProjectDetailClient({ projectId }: { projectId: number }
             {project.project_name}
           </h1>
         </div>
-        <button onClick={() => router.push("/projects")} className="btn btn-secondary">
+        <Link href="/projects" className="btn btn-secondary">
           返回主页
-        </button>
+        </Link>
       </motion.div>
 
       <div className="grid grid-cols-1 lg:grid-cols-[280px_1fr] gap-6">
@@ -157,13 +158,9 @@ export default function ProjectDetailClient({ projectId }: { projectId: number }
                   <h3 className="text-[11px] text-[#9ca3af] mb-2 uppercase tracking-wider">{group.title}</h3>
                   <div className="grid grid-cols-1 gap-1.5">
                     {group.items.map((item) => (
-                      <button
-                        key={item.path}
-                        onClick={() => router.push(`/projects/${projectId}/${item.path}`)}
-                        className="workflow-action"
-                      >
+                      <Link key={item.path} href={`/projects/${projectId}/${item.path}`} className="workflow-action">
                         {item.label}
-                      </button>
+                      </Link>
                     ))}
                   </div>
                 </div>
@@ -426,13 +423,13 @@ export default function ProjectDetailClient({ projectId }: { projectId: number }
                   </div>
                 )}
                 <div className="pt-3 border-t border-white/[0.06]">
-                  <button
-                    onClick={() => router.push(`/projects/${projectId}/account-package`)}
+                  <Link
+                    href={`/projects/${projectId}/account-package`}
                     className="text-[12px] px-3 py-1.5 rounded-md border transition-all hover:bg-white/[0.08]"
                     style={{ borderColor: "rgba(255,255,255,0.1)", color: "#c0c0c0" }}
                   >
                     查看完整账号包装
-                  </button>
+                  </Link>
                 </div>
               </div>
             ) : (
@@ -466,9 +463,9 @@ export default function ProjectDetailClient({ projectId }: { projectId: number }
                   <h3 className="text-[11px] text-[#9ca3af] mb-2 uppercase tracking-wider">{group.title}</h3>
                   <div className="grid grid-cols-1 gap-1.5">
                     {group.items.map((item) => (
-                      <button
+                      <Link
                         key={item.path}
-                        onClick={() => router.push(`/projects/${projectId}/${item.path}`)}
+                        href={`/projects/${projectId}/${item.path}`}
                         className="w-full text-left px-3 py-2 rounded-[0.625rem] text-[13px] font-medium transition-all border hover:bg-white/[0.04] hover:border-white/[0.12] hover:text-[#f5f5f5]"
                         style={{
                           background: "rgba(255,255,255,0.02)",
@@ -477,7 +474,7 @@ export default function ProjectDetailClient({ projectId }: { projectId: number }
                         }}
                       >
                         {item.label}
-                      </button>
+                      </Link>
                     ))}
                   </div>
                 </div>
