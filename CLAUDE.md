@@ -6,6 +6,15 @@
 - SSH user: root
 - Domain: JSVOC.jadejinyuxuan.com
 
+## Production OSS
+
+- OSS bucket: `jsvoc2`
+- OSS endpoint currently required by the bucket: `oss-cn-beijing.aliyuncs.com`
+- OSS credentials live only in `/opt/JSVOC/current/.env` as `OSS_ACCESS_KEY_ID` and `OSS_ACCESS_KEY_SECRET`.
+- Do not commit real AccessKey ID or AccessKey Secret values to Git. Keep only empty placeholders in `.env.example` and docs.
+- The backend uses OSS for generated images, generated videos, and uploaded reference media. Required RAM permissions include object upload, download/signing support, and delete for verification/cleanup, for example `oss:PutObject`, `oss:GetObject`, and `oss:DeleteObject` on bucket `jsvoc2`.
+- If the bucket is recreated or moved to another region, update `OSS_ENDPOINT` to the endpoint shown in the OSS console for that bucket before restarting `jsvoc_backend`.
+
 Behavioral guidelines to reduce common LLM coding mistakes. Merge with project-specific instructions as needed.
 
 **Tradeoff:** These guidelines bias toward caution over speed. For trivial tasks, use judgment.

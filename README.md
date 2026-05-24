@@ -157,6 +157,7 @@ Docker Compose 用于完整 MVP 联调，包含 PostgreSQL、FastAPI 后端和 n
 
 - `docs/USER_GUIDE.md`：MVP 使用指南
 - `docs/DEPLOYMENT.md`：部署和环境变量说明
+- `docs/OSS.md`：OSS bucket、endpoint、AccessKey 保存位置和权限说明
 - `docs/RELEASE_NOTES.md`：版本发布说明
 
 ## 数据库迁移
