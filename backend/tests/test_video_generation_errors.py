@@ -1,8 +1,11 @@
 import unittest
+from unittest.mock import patch
 
 import httpx
 
 from app.api.video_generation import video_generation_error_message
+from app.core.config import Settings
+from app.services import video_generation_service
 
 
 class VideoGenerationErrorMessageTest(unittest.TestCase):
@@ -34,6 +37,24 @@ class VideoGenerationErrorMessageTest(unittest.TestCase):
         message = video_generation_error_message(exc)
 
         self.assertIn('video generation provider failed 404', message)
+
+    def test_generate_video_requires_local_api_key_before_provider_call(self) -> None:
+        settings = Settings(
+            _env_file=None,
+            VIDEO_GENERATION_BASE_URL='https://ark.cn-beijing.volces.com',
+            VIDEO_GENERATION_API_KEY='',
+            ARK_API_KEY='',
+        )
+
+        with (
+            patch('app.services.video_generation_service.get_settings', return_value=settings),
+            patch('app.services.video_generation_service.httpx.post') as post,
+        ):
+            with self.assertRaises(ValueError) as context:
+                video_generation_service.generate_video('jade bracelet rotating')
+
+        self.assertIn('VIDEO_GENERATION_API_KEY or ARK_API_KEY is required', str(context.exception))
+        post.assert_not_called()
 
 
 if __name__ == '__main__':

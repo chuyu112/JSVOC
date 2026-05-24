@@ -32,6 +32,8 @@ def generate_video(
     started_at = time.perf_counter()
     base_url = video_base_url(settings)
     api_key = video_api_key(settings)
+    if not api_key:
+        raise ValueError("VIDEO_GENERATION_API_KEY or ARK_API_KEY is required for video generation")
     model = resolve_video_model_endpoint(
         str((options or {}).get("model") or ""),
         settings,
@@ -170,6 +172,8 @@ def get_video_task_result(task_id: str) -> dict[str, Any]:
     settings = get_settings()
     base_url = video_base_url(settings)
     api_key = video_api_key(settings)
+    if not api_key:
+        raise ValueError("VIDEO_GENERATION_API_KEY or ARK_API_KEY is required for video generation")
     headers = {}
     if api_key:
         headers["Authorization"] = f"Bearer {api_key}"
@@ -250,7 +254,7 @@ def video_base_url(settings: Settings) -> str:
 
 
 def video_api_key(settings: Settings) -> str:
-    return settings.video_generation_api_key.strip()
+    return settings.video_generation_api_key.strip() or settings.ark_api_key.strip()
 
 
 def strip_url_method_prefix(value: str) -> str:

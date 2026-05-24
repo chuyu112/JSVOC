@@ -1,6 +1,7 @@
 import unittest
 
 from app.core.config import Settings
+from app.services.video_generation_service import video_api_key
 
 
 class ConfigTest(unittest.TestCase):
@@ -19,6 +20,15 @@ class ConfigTest(unittest.TestCase):
 
         self.assertEqual(settings.hot_video_search_provider, "auto")
         self.assertEqual(settings.opencli_hot_video_search_command, "")
+
+    def test_ark_api_key_is_video_generation_fallback(self) -> None:
+        settings = Settings(
+            _env_file=None,
+            VIDEO_GENERATION_API_KEY="",
+            ARK_API_KEY="ark-test-key",
+        )
+
+        self.assertEqual(video_api_key(settings), "ark-test-key")
 
 
 if __name__ == "__main__":

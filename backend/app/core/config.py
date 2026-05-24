@@ -46,6 +46,7 @@ class Settings(BaseSettings):
         alias="DEEPSEEK_ACCOUNT_PACKAGE_MODEL",
     )
     video_generation_base_url: str = Field(default="", alias="VIDEO_GENERATION_BASE_URL")
+    ark_api_key: str = Field(default="", alias="ARK_API_KEY")
     video_generation_api_key: str = Field(default="", alias="VIDEO_GENERATION_API_KEY")
     video_generation_model: str = Field(default="seedance-2.0", alias="VIDEO_GENERATION_MODEL")
     video_generation_seedance_2_endpoint: str = Field(
