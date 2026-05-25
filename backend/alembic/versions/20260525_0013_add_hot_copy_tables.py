@@ -7,12 +7,16 @@ Create Date: 2026-05-25 13:15:00
 
 from alembic import op
 import sqlalchemy as sa
+from sqlalchemy.dialects import postgresql
 
 
 revision = "20260525_0013"
 down_revision = "20260524_0012"
 branch_labels = None
 depends_on = None
+
+
+json_type = sa.JSON().with_variant(postgresql.JSONB(astext_type=sa.Text()), "postgresql")
 
 
 def upgrade() -> None:
@@ -29,8 +33,8 @@ def upgrade() -> None:
         sa.Column("cover_url", sa.String(length=1000), nullable=True),
         sa.Column("title", sa.String(length=240), nullable=False),
         sa.Column("original_script", sa.Text(), nullable=False),
-        sa.Column("metrics_json", sa.JSON(), nullable=False),
-        sa.Column("analysis_json", sa.JSON(), nullable=True),
+        sa.Column("metrics_json", json_type, nullable=False),
+        sa.Column("analysis_json", json_type, nullable=True),
         sa.Column("created_at", sa.DateTime(), nullable=False),
         sa.Column("updated_at", sa.DateTime(), nullable=False),
         sa.ForeignKeyConstraint(["project_id"], ["projects.id"], ondelete="SET NULL"),
@@ -51,8 +55,8 @@ def upgrade() -> None:
         sa.Column("rewrite_mode", sa.String(length=40), nullable=False),
         sa.Column("duration", sa.String(length=20), nullable=False),
         sa.Column("conversion_goal", sa.String(length=80), nullable=False),
-        sa.Column("input_json", sa.JSON(), nullable=False),
-        sa.Column("output_json", sa.JSON(), nullable=False),
+        sa.Column("input_json", json_type, nullable=False),
+        sa.Column("output_json", json_type, nullable=False),
         sa.Column("generation_record_id", sa.Integer(), nullable=True),
         sa.Column("created_at", sa.DateTime(), nullable=False),
         sa.ForeignKeyConstraint(["generation_record_id"], ["generation_records.id"], ondelete="SET NULL"),
