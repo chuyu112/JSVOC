@@ -1,15 +1,21 @@
 import unittest
 from unittest.mock import patch
 
+from fastapi import HTTPException
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, select
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from app.db.base import Base
 from app.db.session import get_db
+from app.llm.llm_gateway import LLMGatewayResponse
 from app.main import app
+from app.models.credit import CreditTransaction
+from app.models.hot_copy import HotCopyRewrite
 from app.models import auth_account, credit, generation_record, hot_copy, llm_channel, project, user  # noqa: F401
+from app.schemas.hot_copy import HotCopyMaterialManualCreate, HotCopyRewriteRequest
+from app.services import hot_copy_service
 
 
 class HotCopyApiTest(unittest.TestCase):
@@ -36,7 +42,7 @@ class HotCopyApiTest(unittest.TestCase):
 
         app.dependency_overrides[get_db] = override_get_db
         self.client = TestClient(app)
-        self.register_user("owner", "owner@example.com")
+        self.user_id = self.register_user("owner", "owner@example.com")
 
     def tearDown(self) -> None:
         app.dependency_overrides.clear()
@@ -149,3 +155,103 @@ class HotCopyApiTest(unittest.TestCase):
         records = self.client.get("/api/generation-records?module_name=hot_copy_rewrite").json()["data"]
         self.assertEqual(records[0]["id"], data["generation_record_id"])
         self.assertTrue(records[0]["output_data"]["success"])
+
+    def test_analyze_rejects_malformed_gateway_output_without_persist_or_charge(self) -> None:
+        db = self.SessionLocal()
+        try:
+            material = hot_copy_service.create_manual_material(
+                db,
+                HotCopyMaterialManualCreate(
+                    platform="douyin",
+                    title="爆款标题",
+                    original_script="爆款口播内容",
+                ),
+                self.user_id,
+            )
+            malformed_result = LLMGatewayResponse(
+                success=True,
+                provider="mock",
+                model="mock-model",
+                content="{}",
+                data={"hook": "only hook"},
+                usage={},
+                latency_ms=1,
+                generation_record_id=123,
+            )
+
+            with patch("app.services.hot_copy_service.LLMGateway.generate", return_value=malformed_result):
+                with self.assertRaises(HTTPException) as raised:
+                    hot_copy_service.analyze_material(db, material.id, self.user_id)
+
+            self.assertEqual(raised.exception.status_code, 502)
+            db.refresh(material)
+            self.assertIsNone(material.analysis_json)
+            charges = db.scalars(
+                select(CreditTransaction).where(CreditTransaction.reason == "hot_copy_analysis")
+            ).all()
+            self.assertEqual(len(charges), 0)
+        finally:
+            db.close()
+
+    def test_rewrite_rejects_missing_generation_record_id_without_persist_or_charge(self) -> None:
+        db = self.SessionLocal()
+        try:
+            material = hot_copy_service.create_manual_material(
+                db,
+                HotCopyMaterialManualCreate(
+                    platform="douyin",
+                    title="爆款标题",
+                    original_script="爆款口播内容",
+                ),
+                self.user_id,
+            )
+            material.analysis_json = {
+                "hook": "反常识开头",
+                "structure": ["开头", "转化"],
+                "emotion_triggers": ["怕买贵"],
+                "trust_builders": ["源头经验"],
+                "conversion_points": ["私信"],
+                "risk_notes": ["不要照搬"],
+            }
+            db.add(material)
+            db.commit()
+            valid_result_without_record = LLMGatewayResponse(
+                success=True,
+                provider="mock",
+                model="mock-model",
+                content="{}",
+                data={
+                    "title": "新标题",
+                    "hook": "新钩子",
+                    "script": "原创口播文案",
+                    "shot_suggestions": ["真人出镜"],
+                    "conversion_script": "私信发图",
+                    "risk_notes": ["不要承诺绝对效果"],
+                },
+                usage={},
+                latency_ms=1,
+                generation_record_id=None,
+            )
+
+            with patch("app.services.hot_copy_service.LLMGateway.generate", return_value=valid_result_without_record):
+                with self.assertRaises(HTTPException) as raised:
+                    hot_copy_service.rewrite_material(
+                        db,
+                        material.id,
+                        HotCopyRewriteRequest(
+                            rewrite_mode="medium",
+                            duration="60s",
+                            conversion_goal="私信获客",
+                        ),
+                        self.user_id,
+                    )
+
+            self.assertEqual(raised.exception.status_code, 502)
+            rewrites = db.scalars(select(HotCopyRewrite)).all()
+            self.assertEqual(len(rewrites), 0)
+            charges = db.scalars(
+                select(CreditTransaction).where(CreditTransaction.reason == "hot_copy_rewrite")
+            ).all()
+            self.assertEqual(len(charges), 0)
+        finally:
+            db.close()

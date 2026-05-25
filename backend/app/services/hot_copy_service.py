@@ -22,6 +22,7 @@ from app.services import credit_service, project_service
 
 
 REDIANBAO_NOT_CONNECTED_MESSAGE = "热点宝数据源暂未接入，请先使用手动输入。"
+HOT_COPY_OUTPUT_FORMAT_ERROR_MESSAGE = "爆款文案生成结果格式错误"
 
 
 def list_materials(
@@ -107,22 +108,28 @@ def analyze_material(
     if not result.success:
         raise gateway_error(result)
 
-    analysis = ensure_dict(result.data)
-    material.analysis_json = analysis
-    db.add(material)
-    credit_service.charge_credits(
-        db,
-        user_id=user_id,
-        cost=credit_service.TEXT_GENERATION_COST,
-        reason="hot_copy_analysis",
-        reference_type="generation_record",
-        reference_id=result.generation_record_id,
-        metadata={"material_id": material.id},
-        commit=False,
-    )
-    db.commit()
-    db.refresh(material)
-    return material, analysis, result.generation_record_id
+    analysis = validate_gateway_output(result, HOT_COPY_ANALYSIS_OUTPUT_SCHEMA)
+    generation_record_id = require_generation_record_id(result)
+
+    try:
+        material.analysis_json = analysis
+        db.add(material)
+        credit_service.charge_credits(
+            db,
+            user_id=user_id,
+            cost=credit_service.TEXT_GENERATION_COST,
+            reason="hot_copy_analysis",
+            reference_type="generation_record",
+            reference_id=generation_record_id,
+            metadata={"material_id": material.id},
+            commit=False,
+        )
+        db.commit()
+        db.refresh(material)
+    except Exception:
+        db.rollback()
+        raise
+    return material, analysis, generation_record_id
 
 
 def rewrite_material(
@@ -161,32 +168,38 @@ def rewrite_material(
     if not result.success:
         raise gateway_error(result)
 
-    output = ensure_dict(result.data)
-    rewrite = HotCopyRewrite(
-        material_id=material.id,
-        user_id=user_id,
-        project_id=project_id,
-        rewrite_mode=payload.rewrite_mode,
-        duration=payload.duration,
-        conversion_goal=payload.conversion_goal,
-        input_json=payload.model_dump(mode="json"),
-        output_json=output,
-        generation_record_id=result.generation_record_id,
-    )
-    db.add(rewrite)
-    credit_service.charge_credits(
-        db,
-        user_id=user_id,
-        cost=credit_service.TEXT_GENERATION_COST,
-        reason="hot_copy_rewrite",
-        reference_type="generation_record",
-        reference_id=result.generation_record_id,
-        metadata={"material_id": material.id, "project_id": project_id},
-        commit=False,
-    )
-    db.commit()
-    db.refresh(rewrite)
-    return rewrite, output, result.generation_record_id
+    output = validate_gateway_output(result, HOT_COPY_REWRITE_OUTPUT_SCHEMA)
+    generation_record_id = require_generation_record_id(result)
+
+    try:
+        rewrite = HotCopyRewrite(
+            material_id=material.id,
+            user_id=user_id,
+            project_id=project_id,
+            rewrite_mode=payload.rewrite_mode,
+            duration=payload.duration,
+            conversion_goal=payload.conversion_goal,
+            input_json=payload.model_dump(mode="json"),
+            output_json=output,
+            generation_record_id=generation_record_id,
+        )
+        db.add(rewrite)
+        credit_service.charge_credits(
+            db,
+            user_id=user_id,
+            cost=credit_service.TEXT_GENERATION_COST,
+            reason="hot_copy_rewrite",
+            reference_type="generation_record",
+            reference_id=generation_record_id,
+            metadata={"material_id": material.id, "project_id": project_id},
+            commit=False,
+        )
+        db.commit()
+        db.refresh(rewrite)
+    except Exception:
+        db.rollback()
+        raise
+    return rewrite, output, generation_record_id
 
 
 def redianbao_reserved_response() -> dict[str, Any]:
@@ -235,6 +248,35 @@ def gateway_error(result: LLMGatewayResponse) -> HTTPException:
     return HTTPException(
         status_code=status.HTTP_502_BAD_GATEWAY,
         detail=result.error or "爆款文案生成失败",
+    )
+
+
+def validate_gateway_output(
+    result: LLMGatewayResponse,
+    output_schema: dict[str, Any],
+) -> dict[str, Any]:
+    data = result.data
+    required = output_schema.get("required")
+    required_keys = required if isinstance(required, list) else []
+    if not isinstance(data, dict):
+        raise output_format_error()
+
+    missing_keys = [key for key in required_keys if key not in data]
+    if missing_keys:
+        raise output_format_error()
+    return data
+
+
+def require_generation_record_id(result: LLMGatewayResponse) -> int:
+    if result.generation_record_id is None:
+        raise output_format_error()
+    return result.generation_record_id
+
+
+def output_format_error() -> HTTPException:
+    return HTTPException(
+        status_code=status.HTTP_502_BAD_GATEWAY,
+        detail=HOT_COPY_OUTPUT_FORMAT_ERROR_MESSAGE,
     )
 
 
