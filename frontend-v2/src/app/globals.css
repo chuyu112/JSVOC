@@ -2615,3 +2615,12 @@ select.input-glass option:hover {
     font-size: 24px !important;
   }
 }
+
+.hot-copy-page textarea.metal-input {
+  min-height: 180px;
+  resize: vertical;
+}
+
+.hot-copy-page select.metal-input {
+  appearance: auto;
+}
