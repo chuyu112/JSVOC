@@ -156,6 +156,28 @@ class HotCopyApiTest(unittest.TestCase):
         self.assertEqual(records[0]["id"], data["generation_record_id"])
         self.assertTrue(records[0]["output_data"]["success"])
 
+    def test_user_cannot_read_other_users_material(self) -> None:
+        material = self.create_material()
+        self.register_user("other", "other@example.com")
+
+        detail = self.client.get(f"/api/hot-copy/materials/{material['id']}")
+        analyze = self.client.post(f"/api/hot-copy/materials/{material['id']}/analyze")
+
+        self.assertEqual(detail.status_code, 404)
+        self.assertEqual(analyze.status_code, 404)
+
+    def test_redianbao_search_returns_reserved_message(self) -> None:
+        response = self.client.post(
+            "/api/hot-copy/redianbao/search",
+            json={"keyword": "翡翠口播", "platform": "douyin", "count": 30},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertFalse(payload["success"])
+        self.assertEqual(payload["data"]["items"], [])
+        self.assertIn("热点宝", payload["message"])
+
     def test_analyze_rejects_malformed_gateway_output_without_persist_or_charge(self) -> None:
         db = self.SessionLocal()
         try:

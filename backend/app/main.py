@@ -3,6 +3,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.api import hot_copy
 from app.api.ai_chat import router as ai_chat_router
 from app.api.auth import router as auth_router
 from app.api.credits import router as credits_router
@@ -67,6 +68,7 @@ app.include_router(reference_images_router)
 app.include_router(video_generation_router)
 app.include_router(generation_records_router)
 app.include_router(generation_tasks_router)
+app.include_router(hot_copy.router)
 app.include_router(hot_videos_router)
 
 
