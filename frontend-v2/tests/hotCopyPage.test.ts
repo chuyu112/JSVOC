@@ -20,5 +20,15 @@ test("hot copy page contains manual douyin workflow and reserved redianbao entry
     assert.match(source, new RegExp(fn));
   }
 
+  for (const field of [
+    "emotion_triggers",
+    "trust_builders",
+    "conversion_points",
+    "risk_notes",
+    "rewrite_brief",
+  ]) {
+    assert.match(source, new RegExp(field));
+  }
+
   assert.doesNotMatch(source, /window\.location/);
 });

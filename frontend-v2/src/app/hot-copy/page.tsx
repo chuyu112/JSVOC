@@ -54,10 +54,12 @@ export default function HotCopyPage() {
     if (!analysis) return [];
     return [
       { label: "开头钩子", value: getString(analysis.hook) },
-      { label: "爆点判断", value: getString(analysis.why_trending) },
       { label: "内容结构", value: getStringList(analysis.structure).join(" / ") },
-      { label: "转化设计", value: getString(analysis.conversion_design) },
-      { label: "可仿写角度", value: getString(analysis.rewrite_angle) },
+      { label: "爆点情绪", value: getStringList(analysis.emotion_triggers).join(" / ") || getString(analysis.why_trending) },
+      { label: "信任支撑", value: getStringList(analysis.trust_builders).join(" / ") },
+      { label: "转化设计", value: getStringList(analysis.conversion_points).join(" / ") || getString(analysis.conversion_design) },
+      { label: "风险提醒", value: getStringList(analysis.risk_notes).join(" / ") },
+      { label: "可仿写简报", value: getString(analysis.rewrite_brief) || getString(analysis.rewrite_angle) || getString(analysis.remake_angle) },
     ].filter((item) => item.value);
   }, [analysis]);
 
@@ -176,8 +178,8 @@ export default function HotCopyPage() {
     setNotice("");
     try {
       await searchRedianbaoHotCopy("抖音口播爆款", 30);
-    } catch (err) {
-      setNotice(err instanceof Error ? err.message : "热点宝数据源暂未接入，请先使用手动输入。");
+    } catch {
+      setNotice("热点宝数据源暂未接入，请先使用手动输入。");
     } finally {
       setLoading("");
     }
