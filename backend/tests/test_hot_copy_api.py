@@ -98,3 +98,54 @@ class HotCopyApiTest(unittest.TestCase):
         )
 
         self.assertEqual(response.status_code, 422)
+
+    def test_create_and_list_manual_materials(self) -> None:
+        material = self.create_material()
+
+        response = self.client.get("/api/hot-copy/materials")
+
+        self.assertEqual(response.status_code, 200)
+        data = response.json()["data"]
+        self.assertEqual(data[0]["id"], material["id"])
+        self.assertEqual(data[0]["platform"], "douyin")
+        self.assertEqual(data[0]["source_type"], "manual")
+
+    def test_analyze_material_records_generation_history(self) -> None:
+        material = self.create_material()
+
+        response = self.client.post(f"/api/hot-copy/materials/{material['id']}/analyze")
+
+        self.assertEqual(response.status_code, 200)
+        data = response.json()["data"]
+        self.assertIn("hook", data["analysis"])
+        self.assertIsInstance(data["generation_record_id"], int)
+        records = self.client.get("/api/generation-records?module_name=hot_copy_analysis").json()["data"]
+        self.assertEqual(records[0]["id"], data["generation_record_id"])
+        self.assertTrue(records[0]["output_data"]["success"])
+
+    def test_rewrite_material_records_generation_history(self) -> None:
+        project_id = self.create_project()
+        material = self.create_material(project_id=project_id)
+        analyze = self.client.post(f"/api/hot-copy/materials/{material['id']}/analyze")
+        self.assertEqual(analyze.status_code, 200)
+
+        response = self.client.post(
+            f"/api/hot-copy/materials/{material['id']}/rewrite",
+            json={
+                "project_id": project_id,
+                "rewrite_mode": "medium",
+                "duration": "60s",
+                "conversion_goal": "私信获客",
+                "product": "翡翠手镯",
+                "target_customer": "怕买贵的新手",
+                "account_persona": "四会源头选品顾问",
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        data = response.json()["data"]
+        self.assertIn("script", data["output"])
+        self.assertIsInstance(data["generation_record_id"], int)
+        records = self.client.get("/api/generation-records?module_name=hot_copy_rewrite").json()["data"]
+        self.assertEqual(records[0]["id"], data["generation_record_id"])
+        self.assertTrue(records[0]["output_data"]["success"])
