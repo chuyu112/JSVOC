@@ -15,6 +15,8 @@ const moduleOptions = [
   { label: "执行计划", value: "execution_plan" },
   { label: "选题生成", value: "topics" },
   { label: "文案生成", value: "script" },
+  { label: "爆点拆解", value: "hot_copy_analysis" },
+  { label: "爆款仿写", value: "hot_copy_rewrite" },
   { label: "生图", value: "image_generate" },
   { label: "图生图", value: "image_edit" },
   { label: "生视频", value: "video_generate" },
@@ -56,6 +58,7 @@ function moduleTagClass(module: string) {
   if (module === "execution_plan") return "bg-[rgba(90,155,130,0.15)] text-[#4a856e]";
   if (module === "topics") return "bg-[rgba(249,115,22,0.15)] text-[#ea580c]";
   if (module === "script") return "bg-[rgba(14,165,233,0.15)] text-[#0284c7]";
+  if (module === "hot_copy_analysis" || module === "hot_copy_rewrite") return "bg-[rgba(245,158,11,0.15)] text-[#f59e0b]";
   if (module === "image_generate" || module === "image_edit") return "bg-[rgba(236,72,153,0.15)] text-[#ec4899]";
   if (module === "video_generate") return "bg-[rgba(34,197,94,0.15)] text-[#22c55e]";
   if (module === "ai_chat") return "bg-[rgba(255,255,255,0.08)] text-[#f5f5f5]";

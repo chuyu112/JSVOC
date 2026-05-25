@@ -11,6 +11,7 @@ import { listGenerationTasks, type GenerationTask } from "@/lib/api/generationTa
 const globalNavItems = [
   { label: "项目档案", mobileLabel: "项目", to: "/projects" },
   { label: "AI爆款拆解", mobileLabel: "爆款", to: "/hot-videos" },
+  { label: "爆款仿写", mobileLabel: "仿写", to: "/hot-copy" },
   { label: "AI生图", mobileLabel: "生图", to: "/images" },
   { label: "AI生视频", mobileLabel: "视频", to: "/videos" },
   { label: "数字资产", mobileLabel: "资产", to: "/assets" },
