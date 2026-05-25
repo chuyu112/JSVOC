@@ -29,20 +29,59 @@ class AlembicMigrationsTest(unittest.TestCase):
                 inspector = inspect(engine)
                 self.assertEqual(
                     {
+                        "account_strategy_contexts",
                         "auth_accounts",
                         "credit_accounts",
                         "credit_transactions",
                         "digital_assets",
-                        "projects",
-                        "project_reference_images",
-                        "account_strategy_contexts",
                         "generation_records",
                         "generation_tasks",
-                        "topics",
+                        "hot_copy_materials",
+                        "hot_copy_rewrites",
+                        "llm_channels",
+                        "projects",
+                        "project_reference_images",
                         "scripts",
+                        "topics",
                         "users",
                     },
                     set(inspector.get_table_names()) - {"alembic_version"},
+                )
+                material_columns = {column["name"] for column in inspector.get_columns("hot_copy_materials")}
+                self.assertTrue(
+                    {
+                        "id",
+                        "user_id",
+                        "project_id",
+                        "platform",
+                        "source_type",
+                        "source_url",
+                        "account_name",
+                        "account_home_url",
+                        "cover_url",
+                        "title",
+                        "original_script",
+                        "metrics_json",
+                        "analysis_json",
+                        "created_at",
+                        "updated_at",
+                    }.issubset(material_columns)
+                )
+                rewrite_columns = {column["name"] for column in inspector.get_columns("hot_copy_rewrites")}
+                self.assertTrue(
+                    {
+                        "id",
+                        "material_id",
+                        "user_id",
+                        "project_id",
+                        "rewrite_mode",
+                        "duration",
+                        "conversion_goal",
+                        "input_json",
+                        "output_json",
+                        "generation_record_id",
+                        "created_at",
+                    }.issubset(rewrite_columns)
                 )
             finally:
                 engine.dispose()

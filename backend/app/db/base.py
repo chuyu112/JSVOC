@@ -14,6 +14,7 @@ def init_db() -> None:
     from app.models import digital_asset  # noqa: F401
     from app.models import generation_record  # noqa: F401
     from app.models import generation_task  # noqa: F401
+    from app.models import hot_copy  # noqa: F401
     from app.models import llm_channel  # noqa: F401
     from app.models import project  # noqa: F401
     from app.models import project_reference_image  # noqa: F401
