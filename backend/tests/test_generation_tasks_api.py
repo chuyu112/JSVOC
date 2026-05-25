@@ -172,6 +172,33 @@ class GenerationTasksApiTest(unittest.TestCase):
         self.assertEqual(tasks[1]["status"], "succeeded")
         self.assertEqual(tasks[1]["result_data"]["video_url"], "https://example.test/video.mp4")
 
+    def test_list_generation_tasks_summary_omits_large_payload_fields(self) -> None:
+        with self.SessionLocal() as db:
+            task = GenerationTask(
+                task_type="video_generate",
+                status="failed",
+                user_id=1,
+                project_id=7,
+                input_data={"inline_reference_media": "x" * 1_000_000},
+                result_data={"raw_provider_response": "y" * 1_000_000},
+                error_message="provider failed",
+            )
+            db.add(task)
+            db.commit()
+
+        response = self.client.get("/api/generation-tasks?limit=5&summary=true")
+
+        self.assertEqual(response.status_code, 200)
+        body = response.json()
+        self.assertTrue(body["success"])
+        self.assertEqual(len(body["data"]), 1)
+        item = body["data"][0]
+        self.assertEqual(item["task_type"], "video_generate")
+        self.assertEqual(item["status"], "failed")
+        self.assertEqual(item["error_message"], "provider failed")
+        self.assertNotIn("input_data", item)
+        self.assertNotIn("result_data", item)
+
     def test_completed_image_task_creates_success_generation_record(self) -> None:
         from app.services.generation_record_service import create_generation_record_from_task
 

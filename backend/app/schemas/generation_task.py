@@ -32,6 +32,23 @@ class GenerationTaskRead(BaseModel):
     credit_transaction_id: int | None = None
 
 
+class GenerationTaskSummaryRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    task_type: str
+    status: GenerationTaskStatus
+    user_id: int | None
+    project_id: int | None
+    error_message: str | None = None
+    created_at: datetime
+    updated_at: datetime
+    started_at: datetime | None = None
+    completed_at: datetime | None = None
+    credit_cost: int | None = None
+    credit_transaction_id: int | None = None
+
+
 class GenerationTaskSubmitResponse(BaseModel):
     task_id: int
     task_type: str

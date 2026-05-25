@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useAuth } from "./AuthProvider";
 import { getCreditBalance } from "@/lib/api/credits";
-import { listGenerationTasks, type GenerationTask } from "@/lib/api/generationTasks";
+import { listGenerationTasks, type GenerationTaskSummary } from "@/lib/api/generationTasks";
 // ThemeSwitcher moved to /settings page
 
 const globalNavItems = [
@@ -96,7 +96,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   const auth = useAuth();
   const pathname = usePathname();
   const [creditBalance, setCreditBalance] = useState<number | null>(null);
-  const [recentTasks, setRecentTasks] = useState<GenerationTask[]>([]);
+  const [recentTasks, setRecentTasks] = useState<GenerationTaskSummary[]>([]);
 
   const settingsReturnPath = pathname && pathname !== "/settings" ? pathname : "/projects";
   const settingsHref = `/settings?returnTo=${encodeURIComponent(settingsReturnPath)}`;

@@ -19,6 +19,8 @@ export interface GenerationTask {
   credit_transaction_id: number | null;
 }
 
-export function listGenerationTasks(limit: number = 10): Promise<GenerationTask[]> {
-  return api.get<GenerationTask[]>(`/api/generation-tasks?limit=${limit}`);
+export type GenerationTaskSummary = Omit<GenerationTask, "input_data" | "result_data">;
+
+export function listGenerationTasks(limit: number = 10): Promise<GenerationTaskSummary[]> {
+  return api.get<GenerationTaskSummary[]>(`/api/generation-tasks?limit=${limit}&summary=true`);
 }

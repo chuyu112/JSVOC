@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 from app.api.dependencies import get_current_user
 from app.db.session import get_db
 from app.models.user import User
-from app.schemas.generation_task import GenerationTaskRead
+from app.schemas.generation_task import GenerationTaskRead, GenerationTaskSummaryRead
 from app.services import generation_task_service
 
 
@@ -18,6 +18,7 @@ def success_response(data: object, message: str = "") -> dict[str, object]:
 @router.get("")
 def list_generation_tasks(
     limit: int = Query(default=10, ge=1, le=50),
+    summary: bool = Query(default=False),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> dict[str, object]:
@@ -26,7 +27,8 @@ def list_generation_tasks(
         user_id=current_user.id,
         limit=limit,
     )
-    return success_response([GenerationTaskRead.model_validate(task).model_dump(mode="json") for task in tasks])
+    schema = GenerationTaskSummaryRead if summary else GenerationTaskRead
+    return success_response([schema.model_validate(task).model_dump(mode="json") for task in tasks])
 
 
 @router.get("/{task_id}")
