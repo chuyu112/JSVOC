@@ -464,6 +464,10 @@ class LLMGateway:
             return self._mock_execution_plan(metadata or {})
         if "topic" in normalized or "选题" in normalized:
             return self._mock_topics(metadata or {})
+        if normalized == "hot_copy_analysis":
+            return self._mock_hot_copy_analysis(metadata or {})
+        if normalized == "hot_copy_rewrite":
+            return self._mock_hot_copy_rewrite(metadata or {})
         if "script" in normalized or "copy" in normalized or "文案" in normalized:
             return self._mock_script(metadata or {})
         if normalized == "hot_video_search":
@@ -556,6 +560,37 @@ class LLMGateway:
                 }
             )
         return {"items": items}
+
+    def _mock_hot_copy_analysis(self, metadata: dict[str, Any] | None = None) -> dict[str, Any]:
+        title = str((metadata or {}).get("title") or "新手买翡翠别先问最低价")
+        return {
+            "hook": f"{title} 用反常识开场，直接拦住新手的错误动作。",
+            "structure": ["反常识提醒", "提出三步判断", "展示信任经验", "引导私信承接"],
+            "emotion_triggers": ["怕踩坑", "怕买贵", "想找懂行的人先看"],
+            "trust_builders": ["源头市场经验", "实物细节判断", "明确不让用户冲动下单"],
+            "conversion_points": ["评论预算", "私信用途", "发送实物图"],
+            "risk_notes": ["不要照搬原作者原句", "不要使用原视频画面"],
+            "rewrite_brief": "重写时保留反常识开头和三步判断结构，换成自己的产品、人设和转化动作。",
+        }
+
+    def _mock_hot_copy_rewrite(self, metadata: dict[str, Any] | None = None) -> dict[str, Any]:
+        metadata = metadata or {}
+        product = str(metadata.get("product") or "翡翠手镯")
+        duration = str(metadata.get("duration") or "60s")
+        return {
+            "title": f"买{product}别先问最低价",
+            "hook": f"买{product}，你一上来就问最低价，很容易被带着走。",
+            "script": (
+                f"今天用{duration}讲一个新手最容易踩的坑。买{product}别先问最低价，先看三件事。"
+                "第一，看自然光下整体干不干净；第二，看纹裂棉有没有影响佩戴；"
+                "第三，把预算、用途和款式放在一起判断。"
+                "如果你只是日常戴，不一定追求最冰最透，稳定耐看更重要。"
+                "想让我帮你先看方向，可以在评论区说预算和用途，或者私信发图。"
+            ),
+            "shot_suggestions": ["真人开场提出误区", "展示产品自然光细节", "用字幕列出三步判断", "结尾引导评论或私信"],
+            "conversion_script": "评论区留下预算和用途，私信发实物图，我先帮你判断该重点看哪里。",
+            "risk_notes": ["不要承诺保真升值", "不要使用绝对化价格话术"],
+        }
 
     def _mock_account_package(self) -> dict[str, Any]:
         return {
