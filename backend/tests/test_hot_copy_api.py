@@ -162,9 +162,18 @@ class HotCopyApiTest(unittest.TestCase):
 
         detail = self.client.get(f"/api/hot-copy/materials/{material['id']}")
         analyze = self.client.post(f"/api/hot-copy/materials/{material['id']}/analyze")
+        rewrite = self.client.post(
+            f"/api/hot-copy/materials/{material['id']}/rewrite",
+            json={
+                "rewrite_mode": "medium",
+                "duration": "60s",
+                "conversion_goal": "私信获客",
+            },
+        )
 
         self.assertEqual(detail.status_code, 404)
         self.assertEqual(analyze.status_code, 404)
+        self.assertEqual(rewrite.status_code, 404)
 
     def test_redianbao_search_returns_reserved_message(self) -> None:
         response = self.client.post(
