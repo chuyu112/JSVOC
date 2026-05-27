@@ -3,6 +3,7 @@ services:
     image: ${POSTGRES_IMAGE:-postgres:16}
     container_name: jsvoc_postgres
     restart: always
+    mem_limit: 256m
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-postgres}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
@@ -23,6 +24,7 @@ services:
         PIP_INDEX_URL: ${PIP_INDEX_URL:-https://mirrors.aliyun.com/pypi/simple/}
     container_name: jsvoc_backend
     restart: always
+    mem_limit: 512m
     env_file:
       - .env
     environment:
@@ -43,6 +45,7 @@ services:
         API_BASE_URL: ${API_BASE_URL:-http://backend:8000}
     container_name: jsvoc_frontend
     restart: always
+    mem_limit: 256m
     env_file:
       - .env
     environment:
