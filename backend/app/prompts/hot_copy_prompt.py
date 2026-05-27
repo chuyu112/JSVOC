@@ -1,6 +1,7 @@
 import json
 from typing import Any
 
+from app.models.account_strategy_context import AccountStrategyContext
 from app.models.hot_copy import HotCopyMaterial
 from app.models.project import Project
 from app.schemas.hot_copy import HotCopyRewriteRequest
@@ -29,6 +30,11 @@ HOT_COPY_ANALYSIS_OUTPUT_SCHEMA: dict[str, Any] = {
         "conversion_points": {"type": "array", "items": {"type": "string"}},
         "risk_notes": {"type": "array", "items": {"type": "string"}},
         "rewrite_brief": {"type": "string"},
+        "structure_type": {
+            "type": "string",
+            "enum": ["talking_head", "drama", "mixed"],
+            "description": "视频结构类型: talking_head=单人怼脸口播, drama=多场景剧情, mixed=混剪/其他",
+        },
     },
 }
 
@@ -49,6 +55,21 @@ HOT_COPY_REWRITE_OUTPUT_SCHEMA: dict[str, Any] = {
         "shot_suggestions": {"type": "array", "items": {"type": "string"}},
         "conversion_script": {"type": "string"},
         "risk_notes": {"type": "array", "items": {"type": "string"}},
+        "scene_breakdown": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "scene_no": {"type": "integer"},
+                    "setting": {"type": "string"},
+                    "characters": {"type": "string"},
+                    "action": {"type": "string"},
+                    "dialogue": {"type": "string"},
+                    "shot_type": {"type": "string"},
+                    "image_prompt": {"type": "string"},
+                },
+            },
+        },
     },
 }
 
@@ -73,17 +94,75 @@ def build_hot_copy_analysis_prompts(material: HotCopyMaterial) -> tuple[str, str
 {material.original_script}
 
 要求:
-1. 只输出 JSON，字段必须包含 hook、structure、emotion_triggers、trust_builders、conversion_points、risk_notes。
-2. rewrite_brief 可选，用一句话说明可借鉴的结构，不要包含原文句子。
-3. 风险提醒必须明确禁止照搬原作者原句、搬运画面、冒用账号人设。
+1. 只输出 JSON，字段必须包含 hook、structure、emotion_triggers、trust_builders、conversion_points、risk_notes、structure_type。
+2. structure_type 必须根据文案特征判断：
+   - talking_head: 单人面对镜头输出观点，文案密度高、信息型强、场景单一
+   - drama: 多角色对话、有场景切换、动作描述丰富、情节驱动
+   - mixed: 混剪、vlog、无法明确归入前两类的其他形式
+3. rewrite_brief 可选，用一句话说明可借鉴的结构，不要包含原文句子。
+4. 风险提醒必须明确禁止照搬原作者原句、搬运画面、冒用账号人设。
 """.strip()
     return system_prompt, user_prompt
+
+
+def _build_strategy_context_text(strategy_context: AccountStrategyContext | None) -> str:
+    if strategy_context is None:
+        return ""
+    lines = ["--- 精准人设资料 ---"]
+    if strategy_context.account_positioning:
+        lines.append(f"账号定位: {strategy_context.account_positioning}")
+    if strategy_context.persona:
+        lines.append(f"核心人设: {strategy_context.persona}")
+    if strategy_context.content_style:
+        lines.append(f"内容风格: {strategy_context.content_style}")
+    if strategy_context.content_columns:
+        try:
+            cols = json.dumps(strategy_context.content_columns, ensure_ascii=False)
+            lines.append(f"内容栏目: {cols}")
+        except Exception:
+            pass
+    if strategy_context.trust_design:
+        try:
+            trust = json.dumps(strategy_context.trust_design, ensure_ascii=False)
+            lines.append(f"信任设计: {trust}")
+        except Exception:
+            pass
+    if strategy_context.conversion_path:
+        try:
+            conv = json.dumps(strategy_context.conversion_path, ensure_ascii=False)
+            lines.append(f"转化路径: {conv}")
+        except Exception:
+            pass
+    if strategy_context.platform_strategies:
+        try:
+            plat = json.dumps(strategy_context.platform_strategies, ensure_ascii=False)
+            lines.append(f"平台策略: {plat}")
+        except Exception:
+            pass
+    if strategy_context.target_user_profile:
+        try:
+            prof = json.dumps(strategy_context.target_user_profile, ensure_ascii=False)
+            lines.append(f"目标用户画像: {prof}")
+        except Exception:
+            pass
+    extras = strategy_context.context_data.get("account_package_extras") if isinstance(strategy_context.context_data, dict) else None
+    if extras:
+        if extras.get("tone_principles"):
+            lines.append(f"语调原则: {extras['tone_principles']}")
+        if extras.get("persona_layers"):
+            lines.append(f"人设层次: {extras['persona_layers']}")
+        if extras.get("content_structure_template"):
+            lines.append(f"内容结构模板: {extras['content_structure_template']}")
+    lines.append("---")
+    return "\n".join(lines)
 
 
 def build_hot_copy_rewrite_prompts(
     material: HotCopyMaterial,
     project: Project | None,
     payload: HotCopyRewriteRequest,
+    strategy_context: AccountStrategyContext | None = None,
+    structure_type: str = "talking_head",
 ) -> tuple[str, str]:
     analysis_text = json.dumps(material.analysis_json or {}, ensure_ascii=False, indent=2)
     project_context = "未绑定项目，请只基于素材结构和用户输入改写。"
@@ -100,18 +179,45 @@ def build_hot_copy_rewrite_prompts(
 - 账号阶段: {project.current_stage}
 """.strip()
 
+    strategy_text = _build_strategy_context_text(strategy_context)
+
     product = payload.product or (project.product if project is not None else "未提供")
     target_customer = payload.target_customer or (project.target_audience if project is not None else "未提供")
     account_persona = payload.account_persona or (project.personal_intro if project is not None else "未提供")
-    system_prompt = (
-        "你是短视频口播二创文案策划。只返回合法 JSON，不要 Markdown。"
-        "必须基于爆款结构进行原创重写，不能复制原文句子，不能搬运原视频画面，不能冒用原作者身份。"
-    )
+    if structure_type == "drama":
+        system_prompt = (
+            "你是短视频剧情二创文案策划。只返回合法 JSON，不要 Markdown。"
+            "必须基于爆款结构进行原创重写，不能复制原文句子，不能搬运原视频画面，不能冒用原作者身份。"
+        )
+        type_specific_requirements = """
+6. 此素材为剧情类，script 必须使用剧本格式（场景标题 + 人物动作 + 台词）。
+7. 必须额外输出 scene_breakdown 数组，每个场景包含：scene_no（序号）、setting（场景地点）、characters（出场人物）、action（动作描述）、dialogue（台词）、shot_type（建议景别如特写/中景/远景）、image_prompt（用于 AI 生图的分镜参考提示词，中文）。
+8. 明确提示：剧情类视频不适合数字人口播，需要用户自行拍摄或找演员演绎。
+""".strip()
+    elif structure_type == "mixed":
+        system_prompt = (
+            "你是短视频二创文案策划。只返回合法 JSON，不要 Markdown。"
+            "必须基于爆款结构进行原创重写，不能复制原文句子，不能搬运原视频画面，不能冒用原作者身份。"
+        )
+        type_specific_requirements = """
+6. 此素材为混剪/综合类，script 保持口播或解说稿形式，shot_suggestions 可以包含素材拼接建议。
+""".strip()
+    else:
+        system_prompt = (
+            "你是短视频口播二创文案策划。只返回合法 JSON，不要 Markdown。"
+            "必须基于爆款结构进行原创重写，不能复制原文句子，不能搬运原视频画面，不能冒用原作者身份。"
+        )
+        type_specific_requirements = """
+6. 此素材为口播类，script 必须是可直接对着镜头念的口播稿，语气自然、有节奏感。
+7. shot_suggestions 为简单分镜建议（如"前3秒特写钩子"、"中段产品展示"等）。
+""".strip()
+
     user_prompt = f"""
-请把热门素材改写成一条可拍摄的原创口播文案。
+请把热门素材改写成一条可拍摄的原创文案。
 
 改写参数:
 - 平台: {material.platform}
+- 结构类型: {structure_type}
 - 改写强度: {payload.rewrite_mode}
 - 时长: {payload.duration}
 - 转化目标: {payload.conversion_goal}
@@ -121,6 +227,8 @@ def build_hot_copy_rewrite_prompts(
 
 项目上下文:
 {project_context}
+
+{strategy_text}
 
 素材标题:
 {material.title}
@@ -133,8 +241,10 @@ def build_hot_copy_rewrite_prompts(
 
 要求:
 1. 只输出 JSON，字段必须包含 title、hook、script、shot_suggestions、conversion_script、risk_notes。
-2. script 必须是原创口播，可直接拍摄，围绕产品、目标客户和账号人设展开。
+2. script 必须是原创，可直接拍摄，围绕产品、目标客户和账号人设展开。
 3. 保留可借鉴的钩子类型和结构节奏，但换成自己的场景、表达、证据和转化动作。
-4. 风险提醒必须包含不要照搬原句、不要使用原视频画面、不要承诺绝对效果。
+4. 必须深度融合上述"精准人设资料"中的账号定位、核心人设、内容风格、语调原则，让文案听起来就是这个账号本人说的，不是通用 AI 味。
+5. 风险提醒必须包含不要照搬原句、不要使用原视频画面、不要承诺绝对效果。
+{type_specific_requirements}
 """.strip()
     return system_prompt, user_prompt

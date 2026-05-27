@@ -5,10 +5,14 @@ import { useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import {
   analyzeHotCopyMaterial,
+  createAutoHotCopyMaterial,
   createManualHotCopyMaterial,
+  generateScenesFromRewrite,
+  generateVideoFromRewrite,
   listHotCopyMaterials,
   rewriteHotCopyMaterial,
   searchRedianbaoHotCopy,
+  uploadHotCopyMaterial,
   type HotCopyMaterial,
 } from "@/lib/api/hotCopy";
 
@@ -46,9 +50,30 @@ export default function HotCopyPage() {
   const [accountPersona, setAccountPersona] = useState("");
   const [analysis, setAnalysis] = useState<Record<string, unknown> | null>(null);
   const [rewriteOutput, setRewriteOutput] = useState<Record<string, unknown> | null>(null);
-  const [loading, setLoading] = useState<"" | "save" | "analyze" | "rewrite" | "redianbao">("");
+  const [loading, setLoading] = useState<"" | "save" | "analyze" | "rewrite" | "redianbao" | "parseLink" | "uploadVideo" | "generateVideo" | "generateScenes">("");
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  const [linkUrl, setLinkUrl] = useState("");
+  const [inputMode, setInputMode] = useState<"link" | "upload" | "manual">("link");
+
+  const structureType = getString(analysis?.structure_type);
+  const structureTypeLabel = useMemo(() => {
+    switch (structureType) {
+      case "talking_head": return "口播类";
+      case "drama": return "剧情类";
+      case "mixed": return "混剪类";
+      default: return "";
+    }
+  }, [structureType]);
+
+  const structureTypeHint = useMemo(() => {
+    switch (structureType) {
+      case "talking_head": return "可直接数字人复刻";
+      case "drama": return "需自行拍摄演绎";
+      case "mixed": return "需混剪素材拼接";
+      default: return "";
+    }
+  }, [structureType]);
 
   const analysisPoints = useMemo(() => {
     if (!analysis) return [];
@@ -62,6 +87,12 @@ export default function HotCopyPage() {
       { label: "可仿写简报", value: getString(analysis.rewrite_brief) || getString(analysis.rewrite_angle) || getString(analysis.remake_angle) },
     ].filter((item) => item.value);
   }, [analysis]);
+
+  const sceneBreakdown = useMemo(() => {
+    const raw = rewriteOutput?.scene_breakdown;
+    if (!Array.isArray(raw)) return [];
+    return raw.filter((s) => s && typeof s === "object");
+  }, [rewriteOutput]);
 
   const rewriteScript = getString(rewriteOutput?.script);
   const videoHref = rewriteScript ? `/videos?prompt=${encodeURIComponent(rewriteScript)}` : "/videos";
@@ -164,7 +195,7 @@ export default function HotCopyPage() {
         target_customer: targetCustomer.trim() || null,
         account_persona: accountPersona.trim() || null,
       });
-      setRewriteOutput(response.output);
+      setRewriteOutput({ ...response.output, rewrite_id: response.rewrite.id });
     } catch (err) {
       setError(err instanceof Error ? err.message : "仿写文案失败");
     } finally {
@@ -193,6 +224,92 @@ export default function HotCopyPage() {
     setError("");
   }
 
+  async function parseLink() {
+    const cleanUrl = linkUrl.trim();
+    if (!cleanUrl) {
+      setError("请粘贴视频链接后再解析。");
+      return;
+    }
+    setLoading("parseLink");
+    setError("");
+    setNotice("");
+    try {
+      const material = await createAutoHotCopyMaterial({
+        project_id: projectId.trim() ? Number(projectId) : null,
+        source_url: cleanUrl,
+      });
+      setMaterials((prev) => [material, ...prev.filter((item) => item.id !== material.id)]);
+      selectMaterial(material);
+      setLinkUrl("");
+      setNotice("链接解析完成，已保存为素材。");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "链接解析失败");
+    } finally {
+      setLoading("");
+    }
+  }
+
+  async function handleFileUpload(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    setLoading("uploadVideo");
+    setError("");
+    setNotice("");
+    try {
+      const material = await uploadHotCopyMaterial(
+        file,
+        projectId.trim() ? Number(projectId) : null,
+        "douyin",
+      );
+      setMaterials((prev) => [material, ...prev.filter((item) => item.id !== material.id)]);
+      selectMaterial(material);
+      setNotice("视频上传并提取完成，已保存为素材。");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "视频上传提取失败");
+    } finally {
+      setLoading("");
+    }
+    event.target.value = "";
+  }
+
+  async function handleGenerateVideo() {
+    const rewriteId = rewriteOutput ? (rewriteOutput as Record<string, unknown>).rewrite_id : null;
+    if (!rewriteId || typeof rewriteId !== "number") {
+      setError("无法获取仿写记录 ID，请重新仿写后再试。");
+      return;
+    }
+    setLoading("generateVideo");
+    setError("");
+    setNotice("");
+    try {
+      const result = await generateVideoFromRewrite(rewriteId);
+      setNotice(`视频生成任务已提交（任务 ID: ${result.task_id}），请前往"生成历史"查看进度。`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "视频生成任务提交失败");
+    } finally {
+      setLoading("");
+    }
+  }
+
+  async function handleGenerateScenes() {
+    const rewriteId = rewriteOutput ? (rewriteOutput as Record<string, unknown>).rewrite_id : null;
+    if (!rewriteId || typeof rewriteId !== "number") {
+      setError("无法获取仿写记录 ID，请重新仿写后再试。");
+      return;
+    }
+    setLoading("generateScenes");
+    setError("");
+    setNotice("");
+    try {
+      const result = await generateScenesFromRewrite(rewriteId);
+      setNotice(`已提交 ${result.total} 个分镜素材生成任务，请前往"生成历史"查看进度。`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "分镜素材生成任务提交失败");
+    } finally {
+      setLoading("");
+    }
+  }
+
   return (
     <section className="page-section hot-copy-page">
       <motion.div
@@ -204,7 +321,7 @@ export default function HotCopyPage() {
         <div>
           <p className="eyebrow">Hot Copy Workbench</p>
           <h1 className="section-title">爆款仿写工作台</h1>
-          <p className="section-subtitle">先手动输入抖音爆款素材，拆解爆点后生成可直接拍摄的仿写文案。</p>
+          <p className="section-subtitle">粘贴链接或上传视频自动提取文案，拆解爆点后结合精准人设生成仿写脚本。</p>
         </div>
         <div className="section-header-actions">
           <button className="metal-btn" type="button" onClick={openRedianbaoReserved} disabled={loading === "redianbao"}>
@@ -234,32 +351,103 @@ export default function HotCopyPage() {
             <div className="mb-4 flex items-center justify-between gap-3">
               <div>
                 <h2 className="text-[18px] font-[720] text-[#f5f5f5]">爆款素材</h2>
-                <p className="text-sm text-[#9ca3af]">手动输入抖音口播、标题和来源信息。</p>
+                <p className="text-sm text-[#9ca3af]">粘贴链接、上传视频或手动输入文案。</p>
               </div>
               <span className="metal-tag">抖音</span>
             </div>
 
-            <div className="grid gap-3">
-              <input className="metal-input" value={title} onChange={(event) => setTitle(event.target.value)} placeholder="爆款标题" />
-              <textarea className="metal-input" value={originalScript} onChange={(event) => setOriginalScript(event.target.value)} placeholder="粘贴原始口播文案" />
-              <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-                <input className="metal-input" value={sourceUrl} onChange={(event) => setSourceUrl(event.target.value)} placeholder="视频链接" />
-                <input className="metal-input" value={accountName} onChange={(event) => setAccountName(event.target.value)} placeholder="账号名称" />
-                <input className="metal-input" value={accountHomeUrl} onChange={(event) => setAccountHomeUrl(event.target.value)} placeholder="账号主页链接" />
-                <input className="metal-input" value={coverUrl} onChange={(event) => setCoverUrl(event.target.value)} placeholder="封面链接" />
-                <input className="metal-input" value={projectId} onChange={(event) => setProjectId(event.target.value)} placeholder="项目 ID（可选）" />
-              </div>
-              <button className="metal-btn metal-btn-primary" type="button" onClick={saveMaterial} disabled={loading === "save"}>
-                {loading === "save" ? (
-                  <span className="inline-flex items-center gap-2">
-                    <span className="btn-spinner" />
-                    保存中
-                  </span>
-                ) : (
-                  "保存素材"
-                )}
+            <div className="mb-3 grid grid-cols-3 gap-2">
+              <button
+                className={`metal-btn text-xs ${inputMode === "link" ? "metal-btn-primary" : ""}`}
+                type="button"
+                onClick={() => setInputMode("link")}
+              >
+                粘贴链接
+              </button>
+              <button
+                className={`metal-btn text-xs ${inputMode === "upload" ? "metal-btn-primary" : ""}`}
+                type="button"
+                onClick={() => setInputMode("upload")}
+              >
+                上传视频
+              </button>
+              <button
+                className={`metal-btn text-xs ${inputMode === "manual" ? "metal-btn-primary" : ""}`}
+                type="button"
+                onClick={() => setInputMode("manual")}
+              >
+                手动输入
               </button>
             </div>
+
+            {inputMode === "link" ? (
+              <div className="grid gap-3">
+                <input
+                  className="metal-input"
+                  value={linkUrl}
+                  onChange={(event) => setLinkUrl(event.target.value)}
+                  placeholder="粘贴抖音/小红书/视频号链接"
+                />
+                <input className="metal-input" value={projectId} onChange={(event) => setProjectId(event.target.value)} placeholder="项目 ID（可选）" />
+                <button className="metal-btn metal-btn-primary" type="button" onClick={parseLink} disabled={loading === "parseLink"}>
+                  {loading === "parseLink" ? (
+                    <span className="inline-flex items-center gap-2">
+                      <span className="btn-spinner" />
+                      解析中
+                    </span>
+                  ) : (
+                    "解析并保存"
+                  )}
+                </button>
+              </div>
+            ) : null}
+
+            {inputMode === "upload" ? (
+              <div className="grid gap-3">
+                <label className="metal-input flex cursor-pointer items-center justify-center gap-2 py-3">
+                  <input
+                    type="file"
+                    accept="video/*"
+                    className="sr-only"
+                    onChange={handleFileUpload}
+                    disabled={loading === "uploadVideo"}
+                  />
+                  {loading === "uploadVideo" ? (
+                    <span className="inline-flex items-center gap-2">
+                      <span className="btn-spinner" />
+                      上传提取中
+                    </span>
+                  ) : (
+                    "选择视频文件上传"
+                  )}
+                </label>
+                <input className="metal-input" value={projectId} onChange={(event) => setProjectId(event.target.value)} placeholder="项目 ID（可选）" />
+              </div>
+            ) : null}
+
+            {inputMode === "manual" ? (
+              <div className="grid gap-3">
+                <input className="metal-input" value={title} onChange={(event) => setTitle(event.target.value)} placeholder="爆款标题" />
+                <textarea className="metal-input" value={originalScript} onChange={(event) => setOriginalScript(event.target.value)} placeholder="粘贴原始口播文案" />
+                <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                  <input className="metal-input" value={sourceUrl} onChange={(event) => setSourceUrl(event.target.value)} placeholder="视频链接" />
+                  <input className="metal-input" value={accountName} onChange={(event) => setAccountName(event.target.value)} placeholder="账号名称" />
+                  <input className="metal-input" value={accountHomeUrl} onChange={(event) => setAccountHomeUrl(event.target.value)} placeholder="账号主页链接" />
+                  <input className="metal-input" value={coverUrl} onChange={(event) => setCoverUrl(event.target.value)} placeholder="封面链接" />
+                  <input className="metal-input" value={projectId} onChange={(event) => setProjectId(event.target.value)} placeholder="项目 ID（可选）" />
+                </div>
+                <button className="metal-btn metal-btn-primary" type="button" onClick={saveMaterial} disabled={loading === "save"}>
+                  {loading === "save" ? (
+                    <span className="inline-flex items-center gap-2">
+                      <span className="btn-spinner" />
+                      保存中
+                    </span>
+                  ) : (
+                    "保存素材"
+                  )}
+                </button>
+              </div>
+            ) : null}
 
             <div className="mt-5 border-t border-[rgba(255,255,255,0.06)] pt-4">
               <div className="mb-3 flex items-center justify-between">
@@ -278,13 +466,16 @@ export default function HotCopyPage() {
                       onClick={() => selectMaterial(material)}
                     >
                       <span className="block min-w-0 truncate">{material.title}</span>
+                      {material.source_type === "auto" ? (
+                        <span className="ml-2 shrink-0 text-[10px] text-[#9ca3af]">自动</span>
+                      ) : null}
                     </button>
                   ))}
                 </div>
               ) : (
                 <div className="topic-empty-state">
                   <h3 className="mb-2 text-[18px] font-[680] text-[#f5f5f5]">暂无素材</h3>
-                  <p className="text-sm text-[#9ca3af]">先保存一条手动输入素材，再进入拆解和仿写。</p>
+                  <p className="text-sm text-[#9ca3af]">先保存一条素材，再进入拆解和仿写。</p>
                 </div>
               )}
             </div>
@@ -311,7 +502,7 @@ export default function HotCopyPage() {
             {selectedMaterial ? (
               <article className="metal-block mb-4 p-4">
                 <div className="mb-2 flex flex-wrap gap-2">
-                  <span className="metal-tag">手动输入</span>
+                  <span className="metal-tag">{selectedMaterial.source_type === "auto" ? "自动提取" : "手动输入"}</span>
                   <span className="metal-tag">{selectedMaterial.platform || "抖音"}</span>
                   {selectedMaterial.account_name ? <span className="metal-tag">{selectedMaterial.account_name}</span> : null}
                 </div>
@@ -326,6 +517,15 @@ export default function HotCopyPage() {
                 <p className="text-sm text-[#9ca3af]">从左侧列表选择素材后开始拆解。</p>
               </div>
             )}
+
+            {structureTypeLabel ? (
+              <div className="mb-3 flex items-center gap-2">
+                <span className={`metal-tag ${structureType === "drama" ? "bg-[rgba(180,80,60,0.3)] text-[#e8a090]" : "bg-[rgba(60,140,100,0.3)] text-[#90d8b0]"}`}>
+                  {structureTypeLabel}
+                </span>
+                <span className="text-xs text-[#9ca3af]">{structureTypeHint}</span>
+              </div>
+            ) : null}
 
             {analysisPoints.length ? (
               <div className="grid gap-3">
@@ -378,9 +578,45 @@ export default function HotCopyPage() {
               <article className="metal-block mt-5 p-4">
                 <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
                   <span className="metal-tag">{getString(rewriteOutput.title) || "仿写结果"}</span>
-                  <Link className="metal-btn metal-btn-primary text-xs" href={videoHref}>
-                    去生成视频
-                  </Link>
+                  <div className="flex gap-2">
+                    {structureType === "talking_head" || structureType === "mixed" ? (
+                      <button
+                        className="metal-btn metal-btn-primary text-xs"
+                        type="button"
+                        onClick={handleGenerateVideo}
+                        disabled={loading === "generateVideo"}
+                      >
+                        {loading === "generateVideo" ? (
+                          <span className="inline-flex items-center gap-2">
+                            <span className="btn-spinner" />
+                            提交中
+                          </span>
+                        ) : (
+                          "一键生成视频"
+                        )}
+                      </button>
+                    ) : null}
+                    {structureType === "drama" ? (
+                      <button
+                        className="metal-btn metal-btn-primary text-xs"
+                        type="button"
+                        onClick={handleGenerateScenes}
+                        disabled={loading === "generateScenes"}
+                      >
+                        {loading === "generateScenes" ? (
+                          <span className="inline-flex items-center gap-2">
+                            <span className="btn-spinner" />
+                            提交中
+                          </span>
+                        ) : (
+                          "生成分镜参考图"
+                        )}
+                      </button>
+                    ) : null}
+                    <Link className="metal-btn text-xs" href={videoHref}>
+                      去视频工具
+                    </Link>
+                  </div>
                 </div>
                 {getString(rewriteOutput.hook) ? (
                   <p className="mb-3 text-sm leading-relaxed text-[#d8c58a]">{getString(rewriteOutput.hook)}</p>
@@ -388,6 +624,39 @@ export default function HotCopyPage() {
                 <p className="whitespace-pre-wrap text-sm leading-relaxed text-[#d0ddd6]">
                   {rewriteScript || JSON.stringify(rewriteOutput, null, 2)}
                 </p>
+
+                {structureType === "drama" && sceneBreakdown.length ? (
+                  <div className="mt-4 border-t border-[rgba(255,255,255,0.06)] pt-4">
+                    <h4 className="mb-3 text-[14px] font-[680] text-[#f5f5f5]">场景分镜表</h4>
+                    <div className="grid gap-3">
+                      {sceneBreakdown.map((scene: Record<string, unknown>, idx: number) => (
+                        <div key={idx} className="rounded-md bg-[rgba(255,255,255,0.04)] p-3">
+                          <div className="mb-1 flex items-center gap-2">
+                            <span className="text-xs font-bold text-[#b8a060]">场景 {getString(scene.scene_no) || idx + 1}</span>
+                            <span className="text-xs text-[#9ca3af]">{getString(scene.shot_type) || ""}</span>
+                          </div>
+                          <p className="mb-1 text-sm text-[#d0ddd6]">
+                            <span className="text-[#9ca3af]">地点：</span>{getString(scene.setting) || "未指定"}
+                          </p>
+                          <p className="mb-1 text-sm text-[#d0ddd6]">
+                            <span className="text-[#9ca3af]">人物：</span>{getString(scene.characters) || ""}
+                          </p>
+                          <p className="mb-1 text-sm text-[#d0ddd6]">
+                            <span className="text-[#9ca3af]">动作：</span>{getString(scene.action) || ""}
+                          </p>
+                          <p className="mb-1 text-sm italic text-[#e8c898]">
+                            {getString(scene.dialogue) || ""}
+                          </p>
+                          {getString(scene.image_prompt) ? (
+                            <p className="mt-2 text-xs text-[#7a9a8a]">
+                              生图提示：{getString(scene.image_prompt)}
+                            </p>
+                          ) : null}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
               </article>
             ) : (
               <div className="topic-empty-state mt-5">

@@ -20,7 +20,7 @@ export interface HotCopyMaterial {
 
 export interface CreateManualHotCopyPayload {
   project_id?: number | null;
-  platform: "douyin";
+  platform: "douyin" | "xiaohongshu" | "shipinhao";
   source_url?: string | null;
   account_name?: string | null;
   account_home_url?: string | null;
@@ -28,6 +28,12 @@ export interface CreateManualHotCopyPayload {
   title: string;
   original_script: string;
   metrics_json?: Record<string, unknown>;
+}
+
+export interface CreateAutoHotCopyPayload {
+  project_id?: number | null;
+  source_url?: string | null;
+  platform?: "douyin" | "xiaohongshu" | "shipinhao";
 }
 
 export interface HotCopyAnalysisResponse {
@@ -68,6 +74,20 @@ export async function createManualHotCopyMaterial(payload: CreateManualHotCopyPa
   return api.post<HotCopyMaterial>("/api/hot-copy/materials/manual", payload, { timeoutMs: 20000 });
 }
 
+export async function createAutoHotCopyMaterial(payload: CreateAutoHotCopyPayload): Promise<HotCopyMaterial> {
+  return api.post<HotCopyMaterial>("/api/hot-copy/materials/auto", payload, { timeoutMs: 60000 });
+}
+
+export async function uploadHotCopyMaterial(file: File, projectId?: number | null, platform = "douyin"): Promise<HotCopyMaterial> {
+  const formData = new FormData();
+  formData.append("file", file);
+  if (projectId) {
+    formData.append("project_id", String(projectId));
+  }
+  formData.append("platform", platform);
+  return api.post<HotCopyMaterial>("/api/hot-copy/materials/auto-upload", formData, { timeoutMs: 120000 });
+}
+
 export async function listHotCopyMaterials(): Promise<HotCopyMaterial[]> {
   return api.get<HotCopyMaterial[]>("/api/hot-copy/materials");
 }
@@ -85,4 +105,27 @@ export async function rewriteHotCopyMaterial(
 
 export async function searchRedianbaoHotCopy(keyword: string, count = 30): Promise<unknown> {
   return api.post<unknown>("/api/hot-copy/redianbao/search", { keyword, platform: "douyin", count }, { timeoutMs: 20000 });
+}
+
+export interface GenerationTaskSubmitResponse {
+  task_id: number;
+  task_type: string;
+  status: string;
+  credit_cost: number;
+}
+
+export async function generateVideoFromRewrite(rewriteId: number): Promise<GenerationTaskSubmitResponse> {
+  return api.post<GenerationTaskSubmitResponse>(`/api/hot-copy/rewrites/${rewriteId}/generate-video`, {}, { timeoutMs: 30000 });
+}
+
+export interface SceneTaskInfo {
+  task_id: number;
+  task_type: string;
+  status: string;
+  scene_no: number;
+  credit_cost: number;
+}
+
+export async function generateScenesFromRewrite(rewriteId: number): Promise<{ tasks: SceneTaskInfo[]; total: number }> {
+  return api.post<{ tasks: SceneTaskInfo[]; total: number }>(`/api/hot-copy/rewrites/${rewriteId}/generate-scenes`, {}, { timeoutMs: 60000 });
 }

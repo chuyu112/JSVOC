@@ -4,7 +4,7 @@ from typing import Any, Literal
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
-HotCopyPlatform = Literal["douyin"]
+HotCopyPlatform = Literal["douyin", "xiaohongshu", "shipinhao"]
 RewriteMode = Literal["light", "medium", "strong"]
 RewriteDuration = Literal["30s", "60s", "90s"]
 
@@ -28,6 +28,22 @@ class HotCopyMaterialManualCreate(BaseModel):
         return value
 
     @field_validator("source_url", "account_name", "account_home_url", "cover_url", mode="before")
+    @classmethod
+    def strip_optional_string(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        if isinstance(value, str):
+            cleaned = value.strip()
+            return cleaned or None
+        return value
+
+
+class HotCopyMaterialAutoCreate(BaseModel):
+    project_id: int | None = Field(default=None, gt=0)
+    source_url: str | None = Field(default=None, max_length=1000)
+    platform: HotCopyPlatform = "douyin"
+
+    @field_validator("source_url", mode="before")
     @classmethod
     def strip_optional_string(cls, value: str | None) -> str | None:
         if value is None:

@@ -63,6 +63,10 @@ class Settings(BaseSettings):
         alias="VIDEO_GENERATION_ENABLED_MODELS",
     )
     video_generation_timeout_seconds: float = Field(default=300.0, alias="VIDEO_GENERATION_TIMEOUT_SECONDS", gt=0)
+    video_parser_api_url: str = Field(default="", alias="VIDEO_PARSER_API_URL")
+    video_parser_api_key: str = Field(default="", alias="VIDEO_PARSER_API_KEY")
+    asr_api_url: str = Field(default="", alias="ASR_API_URL")
+    asr_api_key: str = Field(default="", alias="ASR_API_KEY")
 
     model_config = SettingsConfigDict(
         env_file=("../.env.example", "../.env", ".env"),

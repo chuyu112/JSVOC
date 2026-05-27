@@ -17,8 +17,10 @@ from app.prompts.hot_copy_prompt import (
     build_hot_copy_analysis_prompts,
     build_hot_copy_rewrite_prompts,
 )
-from app.schemas.hot_copy import HotCopyMaterialManualCreate, HotCopyRewriteRequest
-from app.services import credit_service, project_service
+from app.schemas.hot_copy import HotCopyMaterialAutoCreate, HotCopyMaterialManualCreate, HotCopyRewriteRequest
+from app.services import account_strategy_context_service, credit_service, project_service
+from app.services.content_classifier_service import classify_script
+from app.services.video_parsing_service import parse_video_link, parse_video_upload
 
 
 REDIANBAO_NOT_CONNECTED_MESSAGE = "热点宝数据源暂未接入，请先使用手动输入。"
@@ -78,6 +80,41 @@ def create_manual_material(
     return material
 
 
+def create_auto_material(
+    db: Session,
+    payload: HotCopyMaterialAutoCreate,
+    user_id: int,
+    file_content: bytes | None = None,
+    filename: str | None = None,
+    content_type: str | None = None,
+) -> HotCopyMaterial:
+    project_id = validate_project_id(db, payload.project_id, user_id)
+
+    if payload.source_url:
+        result = parse_video_link(payload.source_url)
+    elif file_content is not None and filename is not None and content_type is not None:
+        result = parse_video_upload(file_content, filename, content_type)
+    else:
+        raise ValueError("必须提供 source_url 或上传文件")
+
+    material = HotCopyMaterial(
+        user_id=user_id,
+        project_id=project_id,
+        platform=result.platform if result.platform != "unknown" else (payload.platform or "douyin"),
+        source_type="auto",
+        source_url=result.source_url or payload.source_url,
+        account_name=result.account_name,
+        cover_url=result.cover_url,
+        title=result.title,
+        original_script=result.original_script,
+        metrics_json={},
+    )
+    db.add(material)
+    db.commit()
+    db.refresh(material)
+    return material
+
+
 def analyze_material(
     db: Session,
     material_id: int,
@@ -111,6 +148,12 @@ def analyze_material(
     analysis = validate_gateway_output(result, HOT_COPY_ANALYSIS_OUTPUT_SCHEMA)
     generation_record_id = require_generation_record_id(result)
 
+    structure_type = _extract_structure_type(analysis)
+    if not structure_type:
+        rule_result = classify_script(material.original_script)
+        structure_type = rule_result.get("structure_type", "mixed")
+    analysis["structure_type"] = structure_type
+
     try:
         material.analysis_json = analysis
         db.add(material)
@@ -143,7 +186,16 @@ def rewrite_material(
     project_id = project.id if project is not None else None
     credit_service.ensure_sufficient_credits(db, user_id, credit_service.TEXT_GENERATION_COST)
 
-    system_prompt, user_prompt = build_hot_copy_rewrite_prompts(material, project, payload)
+    strategy_context = None
+    if project_id is not None:
+        strategy_context = account_strategy_context_service.get_latest_account_strategy_context(db, project_id)
+
+    structure_type = _extract_structure_type(material.analysis_json or {})
+    if not structure_type:
+        rule_result = classify_script(material.original_script)
+        structure_type = rule_result.get("structure_type", "talking_head")
+
+    system_prompt, user_prompt = build_hot_copy_rewrite_prompts(material, project, payload, strategy_context, structure_type)
     result = LLMGateway().generate(
         db=db,
         project_id=project_id,
@@ -278,6 +330,15 @@ def output_format_error() -> HTTPException:
         status_code=status.HTTP_502_BAD_GATEWAY,
         detail=HOT_COPY_OUTPUT_FORMAT_ERROR_MESSAGE,
     )
+
+
+def _extract_structure_type(analysis: dict[str, Any]) -> str:
+    raw = analysis.get("structure_type")
+    if isinstance(raw, str) and raw.strip():
+        cleaned = raw.strip().lower()
+        if cleaned in {"talking_head", "drama", "mixed"}:
+            return cleaned
+    return ""
 
 
 def ensure_dict(value: Any) -> dict[str, Any]:
