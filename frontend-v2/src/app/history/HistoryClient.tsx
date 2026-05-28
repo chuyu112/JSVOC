@@ -16,7 +16,7 @@ const moduleOptions = [
   { label: "选题生成", value: "topics" },
   { label: "文案生成", value: "script" },
   { label: "爆点拆解", value: "hot_copy_analysis" },
-  { label: "爆款仿写", value: "hot_copy_rewrite" },
+  { label: "AI爆款仿写", value: "hot_copy_rewrite" },
   { label: "生图", value: "image_generate" },
   { label: "图生图", value: "image_edit" },
   { label: "生视频", value: "video_generate" },
@@ -232,7 +232,7 @@ export default function HistoryClient({ projectId }: { projectId?: number }) {
           className="empty-state"
         >
           <h2 className="text-[21px] font-[680] text-[#f5f5f5] mb-2">暂无生成记录</h2>
-          <p className="text-[#9ca3af] text-sm">使用各项目的生成功能后，记录将在此展示。</p>
+          <p className="text-[#9ca3af] text-sm">使用各人设的生成功能后，记录将在此展示。</p>
         </motion.div>
       ) : (
         <motion.div
@@ -247,7 +247,7 @@ export default function HistoryClient({ projectId }: { projectId?: number }) {
                 <tr className="border-b border-[rgba(255,255,255,0.06)] text-[#9ca3af] text-left">
                   <th className="px-4 py-3 w-12">ID</th>
                   <th className="px-4 py-3 w-24">模块</th>
-                  <th className="px-4 py-3 w-12">项目</th>
+                  <th className="px-4 py-3 w-12">人设</th>
                   <th className="px-4 py-3 w-24">供应商</th>
                   <th className="px-4 py-3 w-28">模型</th>
                   <th className="px-4 py-3 w-20">结果</th>

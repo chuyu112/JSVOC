@@ -18,7 +18,6 @@ const workflowNavGroups = [
   {
     title: "生产",
     items: [
-      { label: "热门视频搜索", path: "hot-videos" },
       { label: "选题生成", path: "topics" },
     ],
   },
@@ -214,7 +213,7 @@ export default function ProjectDetailClient({ projectId }: { projectId: number }
 
             {editing ? (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <FieldInput label="项目名称" value={editForm.project_name || ""} onChange={(v) => updateEditForm("project_name", v)} />
+                <FieldInput label="人设名称" value={editForm.project_name || ""} onChange={(v) => updateEditForm("project_name", v)} />
                 <FieldInput label="行业" value={FIXED_INDUSTRY} locked />
                 <FieldInput label="细分行业" value={FIXED_SUB_INDUSTRY} locked />
                 <FieldInput label="产品" value={editForm.product || ""} onChange={(v) => updateEditForm("product", v)} />

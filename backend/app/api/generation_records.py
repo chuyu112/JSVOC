@@ -1,3 +1,5 @@
+from typing import Any
+
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
@@ -9,6 +11,27 @@ from app.services import generation_record_service
 
 
 router = APIRouter(prefix="/api/generation-records", tags=["generation-records"])
+
+
+MAX_JSON_FIELD_LENGTH = 10000
+
+
+def _truncate_large_values(value: Any, max_len: int = MAX_JSON_FIELD_LENGTH) -> Any:
+    if isinstance(value, str) and len(value) > max_len:
+        return value[:max_len] + f"... [truncated {len(value) - max_len} chars]"
+    if isinstance(value, dict):
+        return {k: _truncate_large_values(v, max_len) for k, v in value.items()}
+    if isinstance(value, list):
+        return [_truncate_large_values(v, max_len) for v in value]
+    return value
+
+
+def _sanitize_record_data(record: dict[str, Any]) -> dict[str, Any]:
+    data = dict(record)
+    for key in ("input_data", "output_data"):
+        if key in data and isinstance(data[key], dict):
+            data[key] = _truncate_large_values(data[key])
+    return data
 
 
 def success_response(data: object, message: str = "") -> dict[str, object]:
@@ -33,7 +56,7 @@ def list_generation_records(
         limit=limit,
     )
     return success_response(
-        [GenerationRecordRead.model_validate(record).model_dump(mode="json") for record in records]
+        [_sanitize_record_data(GenerationRecordRead.model_validate(record).model_dump(mode="json")) for record in records]
     )
 
 
@@ -47,4 +70,4 @@ def get_generation_record(
     if record is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="生成记录不存在")
 
-    return success_response(GenerationRecordRead.model_validate(record).model_dump(mode="json"))
+    return success_response(_sanitize_record_data(GenerationRecordRead.model_validate(record).model_dump(mode="json")))

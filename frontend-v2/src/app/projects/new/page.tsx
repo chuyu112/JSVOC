@@ -77,7 +77,7 @@ export default function ProjectCreatePage() {
         <div>
           <p className="eyebrow">New Project</p>
           <h1 className="text-[28px] md:text-[36px] font-bold leading-[1.15] tracking-[-0.02em] text-[#f5f5f5]">
-            新建项目
+            新建人设
           </h1>
         </div>
       </motion.div>
@@ -92,7 +92,7 @@ export default function ProjectCreatePage() {
         <div className="form-grid">
           <div>
             <label className="block text-xs font-medium text-[#9ca3af] mb-1.5">
-              项目名称 *
+              人设名称 *
             </label>
             <input
               type="text"
@@ -102,7 +102,7 @@ export default function ProjectCreatePage() {
                 setForm((p) => ({ ...p, project_name: e.target.value }))
               }
               className="input-glass w-full"
-              placeholder="输入项目名称"
+              placeholder="输入人设名称"
             />
           </div>
           <div>
@@ -226,7 +226,7 @@ export default function ProjectCreatePage() {
             取消
           </button>
           <button type="submit" disabled={loading} className="btn btn-primary">
-            {loading ? "创建中..." : "创建项目"}
+            {loading ? "创建中..." : "创建人设"}
           </button>
         </div>
       </motion.form>

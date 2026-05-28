@@ -20,12 +20,12 @@ export default function ProjectHistoryPage() {
         <div>
           <p className="eyebrow">Generation History</p>
           <h1 className="text-[28px] md:text-[36px] font-bold leading-[1.15] tracking-[-0.02em] text-[#f5f5f5]">
-            项目 {projectId} 生成历史
+            人设 {projectId} 生成记录
           </h1>
         </div>
         <div className="section-header-actions">
           <Link href={`/projects/${projectId}`} className="project-return-btn">
-            返回项目
+            返回人设
           </Link>
         </div>
       </motion.div>

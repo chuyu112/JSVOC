@@ -39,7 +39,7 @@ const moduleOptions = [
 ]
 
 const pageTitle = computed(() =>
-  route.params.id ? `项目 ${route.params.id} 生成历史` : '生成历史',
+  route.params.id ? `人设 ${route.params.id} 生成记录` : '生成记录',
 )
 
 function projectId() {
@@ -57,7 +57,7 @@ async function fetchRecords() {
       offset: 0,
     })
   } catch (error) {
-    ElMessage.error('生成历史加载失败')
+    ElMessage.error('生成记录加载失败')
   } finally {
     loading.value = false
   }
@@ -171,7 +171,7 @@ onMounted(fetchRecords)
         <h1>{{ pageTitle }}</h1>
       </div>
       <div class="header-actions">
-        <el-button @click="backToProject">返回项目详情</el-button>
+        <el-button @click="backToProject">返回人设详情</el-button>
         <el-button type="primary" :loading="loading" @click="fetchRecords">刷新</el-button>
       </div>
     </div>
@@ -194,8 +194,8 @@ onMounted(fetchRecords)
     <div class="plan-controls">
       <el-form label-position="top" class="plan-control-form">
         <div class="history-control-grid">
-          <el-form-item label="项目 ID">
-            <el-input v-model="projectIdInput" clearable placeholder="全部项目" />
+          <el-form-item label="人设 ID">
+            <el-input v-model="projectIdInput" clearable placeholder="全部人设" />
           </el-form-item>
           <el-form-item label="模块类型">
             <el-select v-model="moduleName" class="full-width">
@@ -277,7 +277,7 @@ onMounted(fetchRecords)
             <span class="count-pill">{{ row.topic_count || 1 }}</span>
           </template>
         </el-table-column>
-        <el-table-column prop="project_id" label="项目" width="58" />
+        <el-table-column prop="project_id" label="人设" width="58" />
         <el-table-column label="供应商" width="96" show-overflow-tooltip>
           <template #default="{ row }">
             <span class="history-cell-text" :title="row.model_provider">

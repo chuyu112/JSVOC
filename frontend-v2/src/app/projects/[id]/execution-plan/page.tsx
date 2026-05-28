@@ -82,7 +82,7 @@ export default function ExecutionPlanPage() {
           </div>
           <div className="section-header-actions">
             <Link href={`/projects/${projectId}`} className="project-return-btn">
-              返回项目
+              返回人设
             </Link>
           </div>
         </motion.div>
@@ -129,7 +129,7 @@ export default function ExecutionPlanPage() {
             {generating ? "生成中..." : "重新生成"}
           </button>
           <Link href={`/projects/${projectId}`} className="project-return-btn">
-            返回项目
+            返回人设
           </Link>
         </div>
       </motion.div>

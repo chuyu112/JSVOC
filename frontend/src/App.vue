@@ -12,7 +12,7 @@ const auth = useAuthStore()
 const globalNavItems = [
   { label: '项目', to: '/projects' },
   { label: '数字资产', to: '/assets' },
-  { label: '生成历史', to: '/history' },
+  { label: '生成记录', to: '/history' },
 ]
 
 const currentNavLabel = computed(

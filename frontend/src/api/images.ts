@@ -115,7 +115,7 @@ async function pollImageGenerationTask(
     await sleep(TASK_POLL_INTERVAL_MS, signal)
   }
 
-  throw new Error('图片生成超时，请稍后在生成历史或任务状态中查看结果')
+  throw new Error('图片生成超时，请稍后在生成记录或任务状态中查看结果')
 }
 
 function sleep(ms: number, signal?: AbortSignal): Promise<void> {

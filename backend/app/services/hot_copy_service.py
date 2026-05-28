@@ -190,7 +190,9 @@ def rewrite_material(
     if project_id is not None:
         strategy_context = account_strategy_context_service.get_latest_account_strategy_context(db, project_id)
 
-    structure_type = _extract_structure_type(material.analysis_json or {})
+    structure_type = payload.structure_type
+    if not structure_type:
+        structure_type = _extract_structure_type(material.analysis_json or {})
     if not structure_type:
         rule_result = classify_script(material.original_script)
         structure_type = rule_result.get("structure_type", "talking_head")

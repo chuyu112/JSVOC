@@ -9,10 +9,14 @@ import {
   createManualHotCopyMaterial,
   generateScenesFromRewrite,
   generateVideoFromRewrite,
+  importDouyinProfile,
   listHotCopyMaterials,
   rewriteHotCopyMaterial,
   searchRedianbaoHotCopy,
-  uploadHotCopyMaterial,
+  transcribeDouyinProfileVideo,
+  type DouyinProfileImportResponse,
+  type DouyinProfileTranscriptionResponse,
+  type DouyinProfileVideo,
   type HotCopyMaterial,
 } from "@/lib/api/hotCopy";
 
@@ -48,13 +52,17 @@ export default function HotCopyPage() {
   const [product, setProduct] = useState("");
   const [targetCustomer, setTargetCustomer] = useState("");
   const [accountPersona, setAccountPersona] = useState("");
+  const [manualStructureType, setManualStructureType] = useState<"" | "talking_head" | "drama" | "mixed">("");
   const [analysis, setAnalysis] = useState<Record<string, unknown> | null>(null);
   const [rewriteOutput, setRewriteOutput] = useState<Record<string, unknown> | null>(null);
-  const [loading, setLoading] = useState<"" | "save" | "analyze" | "rewrite" | "redianbao" | "parseLink" | "uploadVideo" | "generateVideo" | "generateScenes">("");
+  const [loading, setLoading] = useState<"" | "save" | "analyze" | "rewrite" | "redianbao" | "parseLink" | "importProfile" | "generateVideo" | "generateScenes">("");
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [linkUrl, setLinkUrl] = useState("");
-  const [inputMode, setInputMode] = useState<"link" | "upload" | "manual">("link");
+  const [inputMode, setInputMode] = useState<"link" | "manual">("link");
+  const [douyinProfileResult, setDouyinProfileResult] = useState<DouyinProfileImportResponse | null>(null);
+  const [transcribingAwemeId, setTranscribingAwemeId] = useState<string | null>(null);
+  const [profileTranscripts, setProfileTranscripts] = useState<Record<string, DouyinProfileTranscriptionResponse>>({});
 
   const structureType = getString(analysis?.structure_type);
   const structureTypeLabel = useMemo(() => {
@@ -194,6 +202,7 @@ export default function HotCopyPage() {
         product: product.trim() || null,
         target_customer: targetCustomer.trim() || null,
         account_persona: accountPersona.trim() || null,
+        structure_type: manualStructureType || null,
       });
       setRewriteOutput({ ...response.output, rewrite_id: response.rewrite.id });
     } catch (err) {
@@ -249,27 +258,57 @@ export default function HotCopyPage() {
     }
   }
 
-  async function handleFileUpload(event: React.ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0];
-    if (!file) return;
-    setLoading("uploadVideo");
+  async function importProfile() {
+    const cleanUrl = linkUrl.trim();
+    if (!cleanUrl) {
+      setError("请粘贴抖音主页链接后再导入。");
+      return;
+    }
+    setLoading("importProfile");
     setError("");
     setNotice("");
+    setDouyinProfileResult(null);
+    setProfileTranscripts({});
     try {
-      const material = await uploadHotCopyMaterial(
-        file,
-        projectId.trim() ? Number(projectId) : null,
-        "douyin",
-      );
-      setMaterials((prev) => [material, ...prev.filter((item) => item.id !== material.id)]);
-      selectMaterial(material);
-      setNotice("视频上传并提取完成，已保存为素材。");
+      const result = await importDouyinProfile(cleanUrl, 30);
+      setDouyinProfileResult(result);
+      setNotice(`已导入 ${result.desc_quality.total} 条作品，合格简介 ${result.desc_quality.qualified} 条。`);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "视频上传提取失败");
+      setError(err instanceof Error ? err.message : "抖音主页导入失败");
     } finally {
       setLoading("");
     }
-    event.target.value = "";
+  }
+
+  async function transcribeProfileVideo(video: DouyinProfileVideo) {
+    if (!video.media_url) {
+      setError("该作品没有拿到可下载视频地址，无法语音识别。");
+      return;
+    }
+    setTranscribingAwemeId(video.aweme_id);
+    setError("");
+    setNotice("");
+    try {
+      const result = await transcribeDouyinProfileVideo({
+        aweme_id: video.aweme_id,
+        title: video.desc || video.aweme_id,
+        media_url: video.media_url,
+        project_id: projectId.trim() ? Number(projectId) : null,
+      });
+      setProfileTranscripts((prev) => ({ ...prev, [video.aweme_id]: result }));
+      setTitle(video.desc || result.title || "抖音语音识别文案");
+      setOriginalScript(result.text);
+      setSourceUrl(video.video_url || "");
+      setAccountName(douyinProfileResult?.profile.nickname || "");
+      setAccountHomeUrl(douyinProfileResult?.profile.source_url || "");
+      setCoverUrl(video.cover_url || "");
+      setInputMode("manual");
+      setNotice("语音识别已完成，口播文案已填入素材表单。");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "语音识别失败");
+    } finally {
+      setTranscribingAwemeId(null);
+    }
   }
 
   async function handleGenerateVideo() {
@@ -283,7 +322,7 @@ export default function HotCopyPage() {
     setNotice("");
     try {
       const result = await generateVideoFromRewrite(rewriteId);
-      setNotice(`视频生成任务已提交（任务 ID: ${result.task_id}），请前往"生成历史"查看进度。`);
+      setNotice(`视频生成任务已提交（任务 ID: ${result.task_id}），请前往"生成记录"查看进度。`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "视频生成任务提交失败");
     } finally {
@@ -302,7 +341,7 @@ export default function HotCopyPage() {
     setNotice("");
     try {
       const result = await generateScenesFromRewrite(rewriteId);
-      setNotice(`已提交 ${result.total} 个分镜素材生成任务，请前往"生成历史"查看进度。`);
+      setNotice(`已提交 ${result.total} 个分镜素材生成任务，请前往"生成记录"查看进度。`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "分镜素材生成任务提交失败");
     } finally {
@@ -319,9 +358,9 @@ export default function HotCopyPage() {
         className="section-header"
       >
         <div>
-          <p className="eyebrow">Hot Copy Workbench</p>
-          <h1 className="section-title">爆款仿写工作台</h1>
-          <p className="section-subtitle">粘贴链接或上传视频自动提取文案，拆解爆点后结合精准人设生成仿写脚本。</p>
+          <p className="eyebrow">爆款仿写工作台</p>
+          <h1 className="section-title">AI爆款仿写</h1>
+          <p className="section-subtitle">粘贴链接或手动输入文案，拆解爆点后结合精准人设生成仿写脚本。</p>
         </div>
         <div className="section-header-actions">
           <button className="metal-btn" type="button" onClick={openRedianbaoReserved} disabled={loading === "redianbao"}>
@@ -344,32 +383,25 @@ export default function HotCopyPage() {
         initial={{ opacity: 0, y: 18 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1], delay: 0.1 }}
-        className="topic-workspace-plate"
+        className="topic-workspace-plate hot-copy-workspace-plate"
       >
-        <div className="grid grid-cols-1 gap-5 xl:grid-cols-[1fr_1fr_1fr]">
-          <div className="topic-control-panel">
+        <div className="hot-copy-panel-grid grid grid-cols-1 gap-5 xl:grid-cols-[1fr_1fr_1fr]">
+          <div className="asset-card hot-copy-panel">
             <div className="mb-4 flex items-center justify-between gap-3">
               <div>
                 <h2 className="text-[18px] font-[720] text-[#f5f5f5]">爆款素材</h2>
-                <p className="text-sm text-[#9ca3af]">粘贴链接、上传视频或手动输入文案。</p>
+                <p className="text-sm text-[#9ca3af]">粘贴链接或手动输入文案。</p>
               </div>
               <span className="metal-tag">抖音</span>
             </div>
 
-            <div className="mb-3 grid grid-cols-3 gap-2">
+            <div className="mb-3 grid grid-cols-2 gap-2">
               <button
                 className={`metal-btn text-xs ${inputMode === "link" ? "metal-btn-primary" : ""}`}
                 type="button"
                 onClick={() => setInputMode("link")}
               >
                 粘贴链接
-              </button>
-              <button
-                className={`metal-btn text-xs ${inputMode === "upload" ? "metal-btn-primary" : ""}`}
-                type="button"
-                onClick={() => setInputMode("upload")}
-              >
-                上传视频
               </button>
               <button
                 className={`metal-btn text-xs ${inputMode === "manual" ? "metal-btn-primary" : ""}`}
@@ -388,7 +420,7 @@ export default function HotCopyPage() {
                   onChange={(event) => setLinkUrl(event.target.value)}
                   placeholder="粘贴抖音/小红书/视频号链接"
                 />
-                <input className="metal-input" value={projectId} onChange={(event) => setProjectId(event.target.value)} placeholder="项目 ID（可选）" />
+                <input className="metal-input" value={projectId} onChange={(event) => setProjectId(event.target.value)} placeholder="人设档案 ID（可选）" />
                 <button className="metal-btn metal-btn-primary" type="button" onClick={parseLink} disabled={loading === "parseLink"}>
                   {loading === "parseLink" ? (
                     <span className="inline-flex items-center gap-2">
@@ -399,29 +431,68 @@ export default function HotCopyPage() {
                     "解析并保存"
                   )}
                 </button>
-              </div>
-            ) : null}
-
-            {inputMode === "upload" ? (
-              <div className="grid gap-3">
-                <label className="metal-input flex cursor-pointer items-center justify-center gap-2 py-3">
-                  <input
-                    type="file"
-                    accept="video/*"
-                    className="sr-only"
-                    onChange={handleFileUpload}
-                    disabled={loading === "uploadVideo"}
-                  />
-                  {loading === "uploadVideo" ? (
+                <button className="metal-btn" type="button" onClick={importProfile} disabled={loading === "importProfile"}>
+                  {loading === "importProfile" ? (
                     <span className="inline-flex items-center gap-2">
                       <span className="btn-spinner" />
-                      上传提取中
+                      导入主页中
                     </span>
                   ) : (
-                    "选择视频文件上传"
+                    "导入抖音主页最近30条"
                   )}
-                </label>
-                <input className="metal-input" value={projectId} onChange={(event) => setProjectId(event.target.value)} placeholder="项目 ID（可选）" />
+                </button>
+                {douyinProfileResult ? (
+                  <div className="metal-block p-3">
+                    <div className="mb-2 flex items-center justify-between gap-2">
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-[680] text-[#f5f5f5]">
+                          {douyinProfileResult.profile.nickname || "抖音主页"}
+                        </p>
+                        <p className="text-xs text-[#9ca3af]">
+                          合格简介：{douyinProfileResult.desc_quality.qualified}/{douyinProfileResult.desc_quality.total}
+                          （{douyinProfileResult.desc_quality.qualified_percent}%）
+                        </p>
+                      </div>
+                      <span className="metal-tag">{douyinProfileResult.videos.length} 条</span>
+                    </div>
+                    <div className="max-h-[260px] space-y-2 overflow-auto pr-1">
+                      {douyinProfileResult.videos.map((video, index) => {
+                        const transcript = profileTranscripts[video.aweme_id];
+                        const isTranscribing = transcribingAwemeId === video.aweme_id;
+                        return (
+                          <article key={video.aweme_id || index} className="rounded-[0.5rem] border border-[rgba(255,255,255,0.06)] p-2">
+                            <div className="mb-1 flex items-center justify-between gap-2">
+                              <span className="text-[11px] text-[#9ca3af]">#{index + 1}</span>
+                              <div className="flex items-center gap-2">
+                                <span className={`text-[11px] ${video.desc_qualified ? "text-[#90d8b0]" : "text-[#d8c58a]"}`}>
+                                  {video.desc_qualified ? "简介合格" : "需识别"}
+                                </span>
+                                {!video.desc_qualified ? (
+                                  <button
+                                    className="metal-btn px-2 py-1 text-[11px]"
+                                    type="button"
+                                    onClick={() => transcribeProfileVideo(video)}
+                                    disabled={Boolean(transcribingAwemeId)}
+                                  >
+                                    {isTranscribing ? "识别中" : "语音识别"}
+                                  </button>
+                                ) : null}
+                              </div>
+                            </div>
+                            <p className="line-clamp-3 text-xs leading-relaxed text-[#d0ddd6]" title={video.desc}>
+                              {video.desc || "无简介"}
+                            </p>
+                            {transcript ? (
+                              <p className="mt-2 line-clamp-4 text-xs leading-relaxed text-[#f5f5f5]" title={transcript.text}>
+                                {transcript.text}
+                              </p>
+                            ) : null}
+                          </article>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ) : null}
               </div>
             ) : null}
 
@@ -434,7 +505,7 @@ export default function HotCopyPage() {
                   <input className="metal-input" value={accountName} onChange={(event) => setAccountName(event.target.value)} placeholder="账号名称" />
                   <input className="metal-input" value={accountHomeUrl} onChange={(event) => setAccountHomeUrl(event.target.value)} placeholder="账号主页链接" />
                   <input className="metal-input" value={coverUrl} onChange={(event) => setCoverUrl(event.target.value)} placeholder="封面链接" />
-                  <input className="metal-input" value={projectId} onChange={(event) => setProjectId(event.target.value)} placeholder="项目 ID（可选）" />
+                  <input className="metal-input" value={projectId} onChange={(event) => setProjectId(event.target.value)} placeholder="人设档案 ID（可选）" />
                 </div>
                 <button className="metal-btn metal-btn-primary" type="button" onClick={saveMaterial} disabled={loading === "save"}>
                   {loading === "save" ? (
@@ -481,7 +552,7 @@ export default function HotCopyPage() {
             </div>
           </div>
 
-          <div className="topic-control-panel">
+          <div className="asset-card hot-copy-panel">
             <div className="mb-4 flex items-center justify-between gap-3">
               <div>
                 <h2 className="text-[18px] font-[720] text-[#f5f5f5]">爆点拆解</h2>
@@ -539,7 +610,7 @@ export default function HotCopyPage() {
             ) : null}
           </div>
 
-          <div className="topic-control-panel">
+          <div className="asset-card hot-copy-panel">
             <div className="mb-4">
               <h2 className="text-[18px] font-[720] text-[#f5f5f5]">仿写文案</h2>
               <p className="text-sm text-[#9ca3af]">输入产品、人群和人设，生成新账号可用脚本。</p>
@@ -558,6 +629,16 @@ export default function HotCopyPage() {
                   <option value="90s">90s</option>
                 </select>
               </div>
+              <select
+                className="metal-input"
+                value={manualStructureType}
+                onChange={(event) => setManualStructureType(event.target.value as "" | "talking_head" | "drama" | "mixed")}
+              >
+                <option value="">自动识别结构类型（推荐）</option>
+                <option value="talking_head">口播类 — 单人怼脸输出观点</option>
+                <option value="drama">剧情类 — 多角色场景演绎</option>
+                <option value="mixed">混剪类 — 素材拼接/综合</option>
+              </select>
               <input className="metal-input" value={conversionGoal} onChange={(event) => setConversionGoal(event.target.value)} placeholder="转化目标" />
               <input className="metal-input" value={product} onChange={(event) => setProduct(event.target.value)} placeholder="产品/服务" />
               <input className="metal-input" value={targetCustomer} onChange={(event) => setTargetCustomer(event.target.value)} placeholder="目标客户" />

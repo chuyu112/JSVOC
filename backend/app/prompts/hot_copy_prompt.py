@@ -9,8 +9,8 @@ from app.schemas.hot_copy import HotCopyRewriteRequest
 
 HOT_COPY_ANALYSIS_MODULE = "hot_copy_analysis"
 HOT_COPY_REWRITE_MODULE = "hot_copy_rewrite"
-HOT_COPY_ANALYSIS_PROMPT_VERSION = "hot-copy-analysis-v1"
-HOT_COPY_REWRITE_PROMPT_VERSION = "hot-copy-rewrite-v1"
+HOT_COPY_ANALYSIS_PROMPT_VERSION = "hot-copy-analysis-v2"
+HOT_COPY_REWRITE_PROMPT_VERSION = "hot-copy-rewrite-v2"
 
 HOT_COPY_ANALYSIS_OUTPUT_SCHEMA: dict[str, Any] = {
     "type": "object",
@@ -79,7 +79,7 @@ def build_hot_copy_analysis_prompts(material: HotCopyMaterial) -> tuple[str, str
     system_prompt = (
         "你是短视频爆款文案拆解顾问。只返回合法 JSON，不要 Markdown。"
         "你只能分析结构、钩子、情绪、信任和转化动作，不要复制原文，不要搬运原视频画面，"
-        "不要指导逐字改写或洗稿。"
+        "不要指导逐字改写或洗稿。JSON 字段名按约定使用英文；除 structure_type 枚举值外，所有字段值必须使用中文。"
     )
     user_prompt = f"""
 请拆解这条热门口播素材，输出可用于合规二创的结构化分析。
@@ -95,12 +95,13 @@ def build_hot_copy_analysis_prompts(material: HotCopyMaterial) -> tuple[str, str
 
 要求:
 1. 只输出 JSON，字段必须包含 hook、structure、emotion_triggers、trust_builders、conversion_points、risk_notes、structure_type。
-2. structure_type 必须根据文案特征判断：
+2. JSON 字段名按要求保留英文；structure_type 必须输出 talking_head、drama 或 mixed；除此之外所有字段值、说明、列表内容必须全中文，不要输出英文提示词或英文营销术语。
+3. structure_type 必须根据文案特征判断：
    - talking_head: 单人面对镜头输出观点，文案密度高、信息型强、场景单一
    - drama: 多角色对话、有场景切换、动作描述丰富、情节驱动
    - mixed: 混剪、vlog、无法明确归入前两类的其他形式
-3. rewrite_brief 可选，用一句话说明可借鉴的结构，不要包含原文句子。
-4. 风险提醒必须明确禁止照搬原作者原句、搬运画面、冒用账号人设。
+4. rewrite_brief 可选，用一句话说明可借鉴的结构，不要包含原文句子。
+5. 风险提醒必须明确禁止照搬原作者原句、搬运画面、冒用账号人设。
 """.strip()
     return system_prompt, user_prompt
 
@@ -188,28 +189,31 @@ def build_hot_copy_rewrite_prompts(
         system_prompt = (
             "你是短视频剧情二创文案策划。只返回合法 JSON，不要 Markdown。"
             "必须基于爆款结构进行原创重写，不能复制原文句子，不能搬运原视频画面，不能冒用原作者身份。"
+            "JSON 字段名按约定使用英文，但所有字段值必须使用中文。"
         )
         type_specific_requirements = """
-6. 此素材为剧情类，script 必须使用剧本格式（场景标题 + 人物动作 + 台词）。
-7. 必须额外输出 scene_breakdown 数组，每个场景包含：scene_no（序号）、setting（场景地点）、characters（出场人物）、action（动作描述）、dialogue（台词）、shot_type（建议景别如特写/中景/远景）、image_prompt（用于 AI 生图的分镜参考提示词，中文）。
-8. 明确提示：剧情类视频不适合数字人口播，需要用户自行拍摄或找演员演绎。
+- 此素材为剧情类，script 必须使用剧本格式（场景标题 + 人物动作 + 台词）。
+- 必须额外输出 scene_breakdown 数组，每个场景包含：scene_no（序号）、setting（场景地点）、characters（出场人物）、action（动作描述）、dialogue（台词）、shot_type（建议景别如特写/中景/远景）、image_prompt（用于 AI 生图的分镜参考提示词，必须全中文）。
+- 明确提示：剧情类视频不适合数字人口播，需要用户自行拍摄或找演员演绎。
 """.strip()
     elif structure_type == "mixed":
         system_prompt = (
             "你是短视频二创文案策划。只返回合法 JSON，不要 Markdown。"
             "必须基于爆款结构进行原创重写，不能复制原文句子，不能搬运原视频画面，不能冒用原作者身份。"
+            "JSON 字段名按约定使用英文，但所有字段值必须使用中文。"
         )
         type_specific_requirements = """
-6. 此素材为混剪/综合类，script 保持口播或解说稿形式，shot_suggestions 可以包含素材拼接建议。
+- 此素材为混剪/综合类，script 保持口播或解说稿形式，shot_suggestions 可以包含素材拼接建议。
 """.strip()
     else:
         system_prompt = (
             "你是短视频口播二创文案策划。只返回合法 JSON，不要 Markdown。"
             "必须基于爆款结构进行原创重写，不能复制原文句子，不能搬运原视频画面，不能冒用原作者身份。"
+            "JSON 字段名按约定使用英文，但所有字段值必须使用中文。"
         )
         type_specific_requirements = """
-6. 此素材为口播类，script 必须是可直接对着镜头念的口播稿，语气自然、有节奏感。
-7. shot_suggestions 为简单分镜建议（如"前3秒特写钩子"、"中段产品展示"等）。
+- 此素材为口播类，script 必须是可直接对着镜头念的口播稿，语气自然、有节奏感。
+- shot_suggestions 为简单分镜建议（如"前3秒特写钩子"、"中段产品展示"等）。
 """.strip()
 
     user_prompt = f"""
@@ -241,10 +245,12 @@ def build_hot_copy_rewrite_prompts(
 
 要求:
 1. 只输出 JSON，字段必须包含 title、hook、script、shot_suggestions、conversion_script、risk_notes。
-2. script 必须是原创，可直接拍摄，围绕产品、目标客户和账号人设展开。
-3. 保留可借鉴的钩子类型和结构节奏，但换成自己的场景、表达、证据和转化动作。
-4. 必须深度融合上述"精准人设资料"中的账号定位、核心人设、内容风格、语调原则，让文案听起来就是这个账号本人说的，不是通用 AI 味。
-5. 风险提醒必须包含不要照搬原句、不要使用原视频画面、不要承诺绝对效果。
+2. JSON 字段名按要求保留英文，所有字段值、脚本、台词、分镜、风险提醒、生图提示词必须全中文。
+3. image_prompt 必须是中文自然语言画面描述，不要输出英文关键词、英文逗号分隔词、英文摄影术语或中英混写。
+4. script 必须是原创，可直接拍摄，围绕产品、目标客户和账号人设展开。
+5. 保留可借鉴的钩子类型和结构节奏，但换成自己的场景、表达、证据和转化动作。
+6. 必须深度融合上述"精准人设资料"中的账号定位、核心人设、内容风格、语调原则，让文案听起来就是这个账号本人说的，不是通用 AI 味。
+7. 风险提醒必须包含不要照搬原句、不要使用原视频画面、不要承诺绝对效果。
 {type_specific_requirements}
 """.strip()
     return system_prompt, user_prompt

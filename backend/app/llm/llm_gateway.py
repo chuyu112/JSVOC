@@ -571,6 +571,7 @@ class LLMGateway:
             "conversion_points": ["评论预算", "私信用途", "发送实物图"],
             "risk_notes": ["不要照搬原作者原句", "不要使用原视频画面"],
             "rewrite_brief": "重写时保留反常识开头和三步判断结构，换成自己的产品、人设和转化动作。",
+            "structure_type": "talking_head",
         }
 
     def _mock_hot_copy_rewrite(self, metadata: dict[str, Any] | None = None) -> dict[str, Any]:
@@ -590,6 +591,17 @@ class LLMGateway:
             "shot_suggestions": ["真人开场提出误区", "展示产品自然光细节", "用字幕列出三步判断", "结尾引导评论或私信"],
             "conversion_script": "评论区留下预算和用途，私信发实物图，我先帮你判断该重点看哪里。",
             "risk_notes": ["不要承诺保真升值", "不要使用绝对化价格话术"],
+            "scene_breakdown": [
+                {
+                    "scene_no": 1,
+                    "setting": "自然光看货桌前",
+                    "characters": "账号主理人",
+                    "action": "手持翡翠手镯，对镜头指出新手常见误区",
+                    "dialogue": f"买{product}，别一上来就问最低价。",
+                    "shot_type": "近景",
+                    "image_prompt": "自然光看货桌前，一位翡翠账号主理人手持翡翠手镯，对镜头讲解新手选购误区，画面真实、干净、质感清晰。",
+                }
+            ],
         }
 
     def _mock_account_package(self) -> dict[str, Any]:

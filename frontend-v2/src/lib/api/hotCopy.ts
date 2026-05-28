@@ -36,6 +36,49 @@ export interface CreateAutoHotCopyPayload {
   platform?: "douyin" | "xiaohongshu" | "shipinhao";
 }
 
+export interface DouyinProfileVideo {
+  aweme_id: string;
+  video_url: string;
+  media_url: string;
+  audio_url: string;
+  desc: string;
+  desc_qualified: boolean;
+  create_time: number | null;
+  cover_url: string;
+  metrics: Record<string, number>;
+}
+
+export interface DouyinProfileImportResponse {
+  profile: {
+    sec_user_id: string;
+    nickname: string;
+    avatar_url: string;
+    signature: string;
+    follower_count: number;
+    total_favorited: number;
+    aweme_count: number;
+    source_url: string;
+  };
+  videos: DouyinProfileVideo[];
+  desc_quality: {
+    total: number;
+    qualified: number;
+    qualified_percent: number;
+  };
+  pagination?: Record<string, unknown>;
+}
+
+export interface DouyinProfileTranscriptionResponse {
+  aweme_id: string;
+  title: string;
+  text: string;
+  segments: Array<Record<string, unknown>>;
+  duration: number | null;
+  source_video_oss_key: string;
+  source_video_url: string;
+  source_video_url_expires_at: number;
+}
+
 export interface HotCopyAnalysisResponse {
   material: HotCopyMaterial;
   analysis: Record<string, unknown>;
@@ -50,6 +93,7 @@ export interface HotCopyRewritePayload {
   product?: string | null;
   target_customer?: string | null;
   account_persona?: string | null;
+  structure_type?: "talking_head" | "drama" | "mixed" | null;
 }
 
 export interface HotCopyRewriteResponse {
@@ -78,14 +122,25 @@ export async function createAutoHotCopyMaterial(payload: CreateAutoHotCopyPayloa
   return api.post<HotCopyMaterial>("/api/hot-copy/materials/auto", payload, { timeoutMs: 60000 });
 }
 
-export async function uploadHotCopyMaterial(file: File, projectId?: number | null, platform = "douyin"): Promise<HotCopyMaterial> {
-  const formData = new FormData();
-  formData.append("file", file);
-  if (projectId) {
-    formData.append("project_id", String(projectId));
-  }
-  formData.append("platform", platform);
-  return api.post<HotCopyMaterial>("/api/hot-copy/materials/auto-upload", formData, { timeoutMs: 120000 });
+export async function importDouyinProfile(sourceUrl: string, count = 30): Promise<DouyinProfileImportResponse> {
+  return api.post<DouyinProfileImportResponse>(
+    "/api/hot-copy/douyin-profile/import",
+    { source_url: sourceUrl, count },
+    { timeoutMs: 90000 },
+  );
+}
+
+export async function transcribeDouyinProfileVideo(payload: {
+  aweme_id: string;
+  title?: string;
+  media_url: string;
+  project_id?: number | null;
+}): Promise<DouyinProfileTranscriptionResponse> {
+  return api.post<DouyinProfileTranscriptionResponse>(
+    "/api/hot-copy/douyin-profile/transcribe",
+    payload,
+    { timeoutMs: 240000 },
+  );
 }
 
 export async function listHotCopyMaterials(): Promise<HotCopyMaterial[]> {

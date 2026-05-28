@@ -1,7 +1,7 @@
 export default function ProjectModuleTitle({
   projectName,
   moduleName,
-  fallbackProjectName = '项目',
+  fallbackProjectName = '人设',
 }: {
   projectName?: string | null;
   moduleName: string;

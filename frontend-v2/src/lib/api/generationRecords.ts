@@ -42,7 +42,7 @@ export const moduleNameText: Record<GenerationModuleName, string> = {
   topics: "选题生成",
   script: "文案生成",
   hot_copy_analysis: "爆点拆解",
-  hot_copy_rewrite: "爆款仿写",
+  hot_copy_rewrite: "AI爆款仿写",
   image_generate: "生图",
   image_edit: "图生图",
   video_generate: "生视频",

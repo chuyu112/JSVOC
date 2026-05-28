@@ -54,6 +54,32 @@ class HotCopyMaterialAutoCreate(BaseModel):
         return value
 
 
+class DouyinProfileImportRequest(BaseModel):
+    source_url: str = Field(min_length=1, max_length=1000)
+    count: int = Field(default=30, ge=1, le=50)
+
+    @field_validator("source_url", mode="before")
+    @classmethod
+    def strip_source_url(cls, value: str) -> str:
+        if isinstance(value, str):
+            return value.strip()
+        return value
+
+
+class DouyinProfileTranscribeRequest(BaseModel):
+    aweme_id: str = Field(min_length=1, max_length=80)
+    media_url: str = Field(min_length=1, max_length=5000)
+    title: str = Field(default="", max_length=240)
+    project_id: int | None = Field(default=None, gt=0)
+
+    @field_validator("aweme_id", "media_url", "title", mode="before")
+    @classmethod
+    def strip_text(cls, value: str) -> str:
+        if isinstance(value, str):
+            return value.strip()
+        return value
+
+
 class HotCopyMaterialRead(BaseModel):
     id: int
     user_id: int
@@ -88,6 +114,17 @@ class HotCopyRewriteRequest(BaseModel):
     product: str | None = Field(default=None, max_length=200)
     target_customer: str | None = Field(default=None, max_length=200)
     account_persona: str | None = Field(default=None, max_length=200)
+    structure_type: Literal["talking_head", "drama", "mixed"] | None = Field(default=None)
+
+    @field_validator("structure_type", mode="before")
+    @classmethod
+    def normalize_structure_type(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        cleaned = str(value).strip().lower()
+        if cleaned in {"talking_head", "drama", "mixed"}:
+            return cleaned
+        return None
 
     @field_validator("conversion_goal", mode="before")
     @classmethod

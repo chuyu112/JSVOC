@@ -33,6 +33,27 @@ function formatTime(value: string) {
   return new Date(value).toLocaleString();
 }
 
+function assetPrompt(asset: DigitalAsset) {
+  if (asset.asset_type !== "image" && asset.asset_type !== "video") return "";
+  const metadataPrompt = asset.asset_metadata?.prompt;
+  return (
+    asset.content_text ||
+    (typeof metadataPrompt === "string" ? metadataPrompt : "") ||
+    asset.preview_text ||
+    ""
+  ).trim();
+}
+
+async function copyPrompt(prompt: string) {
+  if (!prompt) return;
+  try {
+    await navigator.clipboard.writeText(prompt);
+    alert("已复制提示词");
+  } catch {
+    alert("复制失败");
+  }
+}
+
 export default function AssetsPage() {
   const auth = useAuth();
   const [assetType, setAssetType] = useState<DigitalAssetType | "">("");
@@ -146,7 +167,9 @@ export default function AssetsPage() {
           transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1], delay: 0.2 }}
           className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"
         >
-          {assets.map((asset) => (
+          {assets.map((asset) => {
+            const promptText = assetPrompt(asset);
+            return (
             <div key={asset.id} className="asset-card">
               <div className="flex items-center justify-between mb-3">
                 <span className={`tag ${asset.asset_type === "image" ? "tag-success" : asset.asset_type === "video" ? "tag-warning" : "tag-info"}`}>
@@ -175,9 +198,27 @@ export default function AssetsPage() {
               )}
 
               <h3 className="text-[14px] font-[680] text-[#f5f5f5] mb-1">{asset.title}</h3>
+              {promptText ? (
+                <div className="mb-2 rounded-[0.5rem] border border-[rgba(255,255,255,0.08)] bg-[rgba(255,255,255,0.03)] p-2">
+                  <div className="mb-1 flex items-center justify-between gap-2">
+                    <span className="text-[11px] font-[600] text-[#9ccaa8]">提示词</span>
+                    <button
+                      type="button"
+                      onClick={() => copyPrompt(promptText)}
+                      className="text-[11px] text-[#9ca3af] transition-colors hover:text-[#f5f5f5]"
+                    >
+                      复制
+                    </button>
+                  </div>
+                  <p className="line-clamp-3 text-[12px] leading-relaxed text-[#b0b0b0]" title={promptText}>
+                    {promptText}
+                  </p>
+                </div>
+              ) : null}
               <p className="text-[12px] text-[#9ccaa8]">归属：{ownershipLabel(asset, auth.displayName)}</p>
             </div>
-          ))}
+          );
+          })}
         </motion.div>
       )}
     </section>

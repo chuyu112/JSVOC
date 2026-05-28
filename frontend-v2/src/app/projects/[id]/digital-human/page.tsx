@@ -34,7 +34,7 @@ export default function ProjectDigitalHumanPage() {
         </div>
         <div className="section-header-actions">
           <Link href={`/projects/${projectId}`} className="project-return-btn">
-            返回项目
+            返回人设
           </Link>
         </div>
       </motion.div>

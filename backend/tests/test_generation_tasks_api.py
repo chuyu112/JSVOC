@@ -504,6 +504,8 @@ class GenerationTasksApiTest(unittest.TestCase):
             self.assertEqual(asset.project_snapshot["scope"], "account")
             self.assertEqual(asset.asset_metadata["source_project"]["project_id"], project_id)
             self.assertIsNone(asset.oss_object_key)
+            self.assertEqual(asset.content_text, "jade bracelet video")
+            self.assertEqual(asset.asset_metadata["prompt"], "jade bracelet video")
         self.assertEqual(asset.access_url, "https://provider.example.test/video.mp4")
         self.assertEqual(asset.asset_metadata["storage_status"], "oss_not_configured")
 
@@ -536,6 +538,8 @@ class GenerationTasksApiTest(unittest.TestCase):
             self.assertEqual(asset.project_snapshot["project_name"], "账户资产")
             self.assertEqual(asset.user_id, 1)
             self.assertEqual(asset.access_url, "https://provider.example.test/account-video.mp4")
+            self.assertEqual(asset.content_text, "account video")
+            self.assertEqual(asset.asset_metadata["prompt"], "account video")
         self.assertEqual(asset.asset_metadata["storage_status"], "oss_not_configured")
 
     def test_fail_stale_generation_tasks_marks_only_old_active_tasks_failed(self) -> None:

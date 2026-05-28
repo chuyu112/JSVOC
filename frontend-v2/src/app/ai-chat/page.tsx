@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import { ChatCircleText, GlobeHemisphereEast, PaperPlaneTilt, PlusCircle } from "@phosphor-icons/react";
 import {
@@ -141,12 +141,11 @@ export default function AIChatPage() {
     void refreshConversations(true);
   }, []);
 
-  useEffect(() => {
-    streamRef.current?.scrollTo({
-      top: streamRef.current.scrollHeight,
-      behavior: "smooth",
-    });
-  }, [messages]);
+  useLayoutEffect(() => {
+    const stream = streamRef.current;
+    if (!stream || loadingMessages) return;
+    stream.scrollTop = stream.scrollHeight;
+  }, [messages, loadingMessages]);
 
   async function handleSubmit(event?: React.FormEvent<HTMLFormElement>) {
     event?.preventDefault();

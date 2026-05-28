@@ -338,7 +338,7 @@ export default function TopicsPage() {
             )}
           </button>
           <Link href={`/projects/${projectId}`} className="project-return-btn">
-            返回项目
+            返回人设
           </Link>
         </div>
       </motion.div>

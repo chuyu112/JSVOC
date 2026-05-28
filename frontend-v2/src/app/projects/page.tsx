@@ -36,7 +36,7 @@ export default function ProjectsPage() {
   }, []);
 
   async function handleDelete(project: Project) {
-    if (!confirm(`确认删除项目「${project.project_name}」？`)) return;
+    if (!confirm(`确认删除人设档案「${project.project_name}」？`)) return;
     try {
       await deleteProject(project.id);
       await fetchProjects();
@@ -60,14 +60,14 @@ export default function ProjectsPage() {
         <div>
           <p className="eyebrow">Projects</p>
           <h1 className="text-[28px] md:text-[36px] font-bold leading-[1.15] tracking-[-0.02em] text-[#f5f5f5]">
-            项目档案
+            人设档案
           </h1>
         </div>
         <button
           onClick={() => router.push("/projects/new")}
           className="btn btn-primary"
         >
-          新建项目
+          新建人设
         </button>
       </div>
 
@@ -79,7 +79,7 @@ export default function ProjectsPage() {
         className="overview-strip"
       >
         <div className="overview-item">
-          <span>项目总数</span>
+          <span>人设总数</span>
           <strong>{projectCount}</strong>
         </div>
         <div className="overview-item">
@@ -99,8 +99,8 @@ export default function ProjectsPage() {
         </div>
       ) : projects.length === 0 ? (
         <div className="empty-state">
-          <h2>暂无项目</h2>
-          <p>点击右上角按钮创建你的第一个项目</p>
+          <h2>暂无人设档案</h2>
+          <p>点击右上角按钮创建你的第一个人设档案</p>
         </div>
       ) : (
         <div className="project-card-grid">
@@ -127,7 +127,7 @@ export default function ProjectsPage() {
                   onClick={() => handleDelete(project)}
                   className="flat-delete-action"
                   title="删除"
-                  aria-label={`删除项目 ${project.project_name}`}
+                  aria-label={`删除人设档案 ${project.project_name}`}
                 >
                   <X size={13} weight="bold" />
                 </button>

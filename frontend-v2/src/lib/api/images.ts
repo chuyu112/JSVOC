@@ -159,6 +159,7 @@ export interface DigitalAsset {
   source_project_id: number | null;
   title: string;
   preview_text: string | null;
+  content_text: string | null;
   access_url: string | null;
   asset_metadata: Record<string, unknown>;
   created_at: string;

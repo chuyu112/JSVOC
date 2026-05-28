@@ -164,6 +164,8 @@ class DigitalAssetsApiTest(unittest.TestCase):
         self.assertIsNone(assets[0]["source_project_id"])
         self.assertEqual(assets[0]["project_snapshot"]["scope"], "account")
         self.assertEqual(assets[0]["project_snapshot"]["project_name"], "账户资产")
+        self.assertEqual(assets[0]["content_text"], "account image")
+        self.assertEqual(assets[0]["asset_metadata"]["prompt"], "account image")
 
 
 if __name__ == "__main__":

@@ -9,14 +9,12 @@ import { listGenerationTasks, type GenerationTaskSummary } from "@/lib/api/gener
 // ThemeSwitcher moved to /settings page
 
 const globalNavItems = [
-  { label: "项目档案", mobileLabel: "项目", to: "/projects" },
-  { label: "AI爆款拆解", mobileLabel: "爆款", to: "/hot-videos" },
-  { label: "爆款仿写", mobileLabel: "仿写", to: "/hot-copy" },
+  { label: "AI爆款仿写", mobileLabel: "仿写", to: "/hot-copy" },
   { label: "AI生图", mobileLabel: "生图", to: "/images" },
   { label: "AI生视频", mobileLabel: "视频", to: "/videos" },
   { label: "数字资产", mobileLabel: "资产", to: "/assets" },
   { label: "AI聊天", mobileLabel: "聊天", to: "/ai-chat" },
-  { label: "AI数字人", mobileLabel: "数字人", to: "/digital-human" },
+  { label: "人设档案", mobileLabel: "人设", to: "/projects" },
   { label: "生成记录", mobileLabel: "记录", to: "/history" },
 ];
 
@@ -51,10 +49,11 @@ function NavLink({
   active: boolean;
   children: React.ReactNode;
 }) {
+  const squareBottom = href === "/ai-chat" || href === "/projects";
   return (
     <Link
       href={href}
-      className={`inline-flex items-center min-h-[36px] px-2.5 lg:px-3 xl:px-4 rounded-[0.75rem] font-medium text-[14px] transition-all duration-300 ${
+      className={`app-nav-link ${squareBottom ? "app-nav-link-square-bottom" : ""} inline-flex items-center min-h-[36px] px-2.5 lg:px-3 xl:px-4 rounded-[0.75rem] font-medium text-[14px] transition-all duration-300 ${
         active
           ? "border border-[rgba(90,155,130,0.2)] bg-[rgba(90,155,130,0.15)] text-[#4a856e] font-[620]"
           : "border border-transparent text-[#7a8a82] hover:text-[#f5f5f5] hover:bg-[rgba(255,255,255,0.06)]"
@@ -97,6 +96,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const [creditBalance, setCreditBalance] = useState<number | null>(null);
   const [recentTasks, setRecentTasks] = useState<GenerationTaskSummary[]>([]);
+  const [dismissedFailedTaskId, setDismissedFailedTaskId] = useState<number | null>(null);
 
   const settingsReturnPath = pathname && pathname !== "/settings" ? pathname : "/projects";
   const settingsHref = `/settings?returnTo=${encodeURIComponent(settingsReturnPath)}`;
@@ -149,6 +149,8 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   const isLoginPage = pathname === "/login";
   const showPrivateShell = auth.isAuthenticated || (!auth.checked && !isLoginPage);
   const latestFailedTask = recentTasks.find((task) => task.status === "failed" && task.error_message);
+  const visibleFailedTask =
+    latestFailedTask && latestFailedTask.id !== dismissedFailedTaskId ? latestFailedTask : null;
 
   return (
     <div className="flex flex-col min-h-[100dvh]">
@@ -199,7 +201,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
               </div>
             )}
           </div>
-          {auth.isAuthenticated && latestFailedTask && (
+          {auth.isAuthenticated && visibleFailedTask && (
             <div className="flex w-[min(1400px,100%)] items-center gap-2 border-t border-[rgba(255,255,255,0.06)] py-2 text-[12px] text-red-100">
               <Link
                 href="/history"
@@ -208,14 +210,22 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                 生成失败
               </Link>
               <span className="shrink-0 text-red-200/90">
-                {taskTypeLabel(latestFailedTask.task_type)} #{latestFailedTask.id}
+                {taskTypeLabel(visibleFailedTask.task_type)} #{visibleFailedTask.id}
               </span>
               <span
                 className="min-w-0 truncate text-red-100/90"
-                title={cleanGenerationError(latestFailedTask.error_message)}
+                title={cleanGenerationError(visibleFailedTask.error_message)}
               >
-                原因：{cleanGenerationError(latestFailedTask.error_message)}
+                原因：{cleanGenerationError(visibleFailedTask.error_message)}
               </span>
+              <button
+                type="button"
+                aria-label="关闭生成失败提示"
+                onClick={() => setDismissedFailedTaskId(visibleFailedTask.id)}
+                className="ml-auto inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-red-300/20 text-[16px] font-[700] leading-none text-red-100/80 transition-colors hover:bg-red-500/15 hover:text-white"
+              >
+                ×
+              </button>
             </div>
           )}
         </header>

@@ -1,4 +1,4 @@
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, UploadFile, File
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, UploadFile, File, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -14,6 +14,8 @@ from app.models.hot_copy import HotCopyRewrite
 from app.models.user import User
 from app.schemas.generation_task import GenerationTaskCreate, GenerationTaskSubmitResponse
 from app.schemas.hot_copy import (
+    DouyinProfileImportRequest,
+    DouyinProfileTranscribeRequest,
     HotCopyAnalysisResponse,
     HotCopyMaterialAutoCreate,
     HotCopyMaterialManualCreate,
@@ -28,6 +30,7 @@ from app.services import (
     generation_task_service,
     hot_copy_service,
     project_reference_image_service,
+    video_parsing_service,
 )
 
 
@@ -59,7 +62,12 @@ def create_auto_material(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> dict[str, object]:
-    material = hot_copy_service.create_auto_material(db, payload, current_user.id)
+    try:
+        material = hot_copy_service.create_auto_material(db, payload, current_user.id)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc)) from exc
     data = HotCopyMaterialRead.model_validate(material).model_dump(mode="json")
     return success_response(data, "视频链接解析完成，素材已保存")
 
@@ -73,16 +81,56 @@ def create_auto_material_upload(
     current_user: User = Depends(get_current_user),
 ) -> dict[str, object]:
     file_content = file.file.read()
-    material = hot_copy_service.create_auto_material(
-        db,
-        HotCopyMaterialAutoCreate(project_id=project_id, platform=platform),
-        current_user.id,
-        file_content=file_content,
-        filename=file.filename or "upload.mp4",
-        content_type=file.content_type or "video/mp4",
-    )
+    try:
+        material = hot_copy_service.create_auto_material(
+            db,
+            HotCopyMaterialAutoCreate(project_id=project_id, platform=platform),
+            current_user.id,
+            file_content=file_content,
+            filename=file.filename or "upload.mp4",
+            content_type=file.content_type or "video/mp4",
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc)) from exc
     data = HotCopyMaterialRead.model_validate(material).model_dump(mode="json")
     return success_response(data, "视频上传并提取完成，素材已保存")
+
+
+@router.post("/api/hot-copy/douyin-profile/import")
+def import_douyin_profile(
+    payload: DouyinProfileImportRequest,
+    current_user: User = Depends(get_current_user),
+) -> dict[str, object]:
+    _ = current_user
+    try:
+        data = video_parsing_service.import_douyin_profile_videos(payload.source_url, count=payload.count)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc)) from exc
+    return success_response(data, "抖音主页最近作品已导入")
+
+
+@router.post("/api/hot-copy/douyin-profile/transcribe")
+def transcribe_douyin_profile_video(
+    payload: DouyinProfileTranscribeRequest,
+    current_user: User = Depends(get_current_user),
+) -> dict[str, object]:
+    try:
+        data = video_parsing_service.transcribe_douyin_profile_video(
+            media_url=payload.media_url,
+            aweme_id=payload.aweme_id,
+            title=payload.title,
+            user_id=current_user.id,
+            project_id=payload.project_id,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc)) from exc
+    return success_response(data, "ASR transcription completed")
 
 
 @router.get("/api/hot-copy/materials")
@@ -303,12 +351,15 @@ def generate_scenes_from_rewrite(
             size="1024x1024",
             quality="standard",
         )
+        input_data = payload.model_dump(mode="json")
+        input_data["rewrite_id"] = rewrite_id
+        input_data["material_id"] = rewrite.material_id
         task = generation_task_service.create_generation_task(
             db,
             GenerationTaskCreate(
                 task_type="image_generate",
                 project_id=project_id,
-                input_data=payload.model_dump(mode="json"),
+                input_data=input_data,
             ),
             user_id=current_user.id,
         )

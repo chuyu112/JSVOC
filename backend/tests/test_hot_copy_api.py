@@ -187,6 +187,71 @@ class HotCopyApiTest(unittest.TestCase):
         self.assertEqual(payload["data"]["items"], [])
         self.assertIn("热点宝", payload["message"])
 
+    def test_auto_material_parser_runtime_error_returns_502(self) -> None:
+        with patch("app.services.hot_copy_service.parse_video_link", side_effect=RuntimeError("暂不支持该平台自动解析")):
+            response = self.client.post(
+                "/api/hot-copy/materials/auto",
+                json={"source_url": "https://channels.weixin.qq.com/web/pages/feed?exportkey=test"},
+            )
+
+        self.assertEqual(response.status_code, 502)
+        self.assertIn("暂不支持", response.json()["detail"])
+
+    def test_import_douyin_profile_returns_recent_videos_and_desc_quality(self) -> None:
+        import_result = {
+            "profile": {"sec_user_id": "sec-user-1", "nickname": "Account Name"},
+            "videos": [
+                {"aweme_id": "aweme-1", "desc": "够长的文案。第二句也有结构。第三句继续展开重点。", "desc_qualified": True}
+            ],
+            "desc_quality": {"total": 1, "qualified": 1, "qualified_percent": 100.0},
+        }
+        with patch("app.api.hot_copy.video_parsing_service.import_douyin_profile_videos", return_value=import_result) as mocked:
+            response = self.client.post(
+                "/api/hot-copy/douyin-profile/import",
+                json={"source_url": "https://www.douyin.com/user/sec-user-1", "count": 30},
+            )
+
+        self.assertEqual(response.status_code, 200)
+        data = response.json()["data"]
+        self.assertEqual(data["profile"]["nickname"], "Account Name")
+        self.assertEqual(data["desc_quality"]["qualified_percent"], 100.0)
+        mocked.assert_called_once_with("https://www.douyin.com/user/sec-user-1", count=30)
+
+    def test_transcribe_douyin_profile_video_returns_asr_text(self) -> None:
+        transcribe_result = {
+            "aweme_id": "aweme-1",
+            "title": "short title",
+            "text": "full spoken script",
+            "segments": [],
+            "duration": 12.3,
+            "source_video_oss_key": "users/1/account/references/videos/test.mp4",
+            "source_video_url": "https://oss.example.test/signed.mp4",
+            "source_video_url_expires_at": 1710000100,
+        }
+        with patch(
+            "app.api.hot_copy.video_parsing_service.transcribe_douyin_profile_video",
+            return_value=transcribe_result,
+        ) as mocked:
+            response = self.client.post(
+                "/api/hot-copy/douyin-profile/transcribe",
+                json={
+                    "aweme_id": "aweme-1",
+                    "title": "short title",
+                    "media_url": "https://v26-web.douyinvod.com/video.mp4",
+                },
+            )
+
+        self.assertEqual(response.status_code, 200)
+        data = response.json()["data"]
+        self.assertEqual(data["text"], "full spoken script")
+        mocked.assert_called_once_with(
+            media_url="https://v26-web.douyinvod.com/video.mp4",
+            aweme_id="aweme-1",
+            title="short title",
+            user_id=self.user_id,
+            project_id=None,
+        )
+
     def test_analyze_rejects_malformed_gateway_output_without_persist_or_charge(self) -> None:
         db = self.SessionLocal()
         try:

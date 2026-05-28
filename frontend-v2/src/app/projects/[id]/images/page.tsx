@@ -121,6 +121,17 @@ function readFileAsDataUrl(file: File): Promise<string> {
   });
 }
 
+function digitalAssetPrompt(asset: DigitalAsset) {
+  const metadataPrompt = asset.asset_metadata?.prompt;
+  return (
+    asset.content_text ||
+    (typeof metadataPrompt === "string" ? metadataPrompt : "") ||
+    asset.preview_text ||
+    asset.title ||
+    ""
+  ).trim();
+}
+
 function imageDisplayUrl(image: GeneratedImage | undefined) {
   if (!image) return "";
   return image.url || image.data_url || (image.b64_json ? `data:${image.mime_type || "image/png"};base64,${image.b64_json}` : "");
@@ -436,6 +447,16 @@ export default function ImagesPage() {
     }
   }
 
+  async function copyPromptText(promptText: string) {
+    if (!promptText) return;
+    try {
+      await navigator.clipboard.writeText(promptText);
+      alert("已复制提示词");
+    } catch {
+      alert("复制失败");
+    }
+  }
+
   function downloadImage(url: string | undefined) {
     if (!url) return;
     const link = document.createElement("a");
@@ -478,7 +499,7 @@ export default function ImagesPage() {
         </div>
         <div className="section-header-actions">
           <Link href={`/projects/${projectId}`} className="project-return-btn">
-            返回项目
+            返回人设
           </Link>
         </div>
       </motion.div>
@@ -824,7 +845,7 @@ export default function ImagesPage() {
         )}
       </AnimatePresence>
 
-      {/* 生成历史 */}
+      {/* 生成记录 */}
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -832,7 +853,7 @@ export default function ImagesPage() {
         className="mt-8"
       >
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-semibold text-[#f5f5f5]">生成历史</h2>
+          <h2 className="text-lg font-semibold text-[#f5f5f5]">生成记录</h2>
           {historyLoading && <span className="text-xs text-[#6b7280]">加载中...</span>}
         </div>
 
@@ -842,13 +863,15 @@ export default function ImagesPage() {
           </div>
         ) : (
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-            {history.map((item) => (
+            {history.map((item) => {
+              const promptText = digitalAssetPrompt(item);
+              return (
               <div key={item.id} className="glass card-hover flat-delete-target p-3 flex flex-col gap-2">
                 <button
                   onClick={() => removeHistoryItem(item.id)}
                   className="flat-delete-action"
                   title="删除"
-                  aria-label="删除生成历史"
+                  aria-label="删除生成记录"
                 >
                   <X size={13} weight="bold" />
                 </button>
@@ -866,8 +889,8 @@ export default function ImagesPage() {
                     </div>
                   )}
                 </div>
-                <p className="text-xs text-[#9ca3af] line-clamp-2" title={item.preview_text || item.title}>
-                  {item.preview_text || item.title}
+                <p className="text-xs text-[#9ca3af] line-clamp-3" title={promptText}>
+                  {promptText}
                 </p>
                 <div className="flex items-center justify-between gap-1">
                   <span className="text-[10px] text-[#6b7280]">
@@ -875,15 +898,22 @@ export default function ImagesPage() {
                   </span>
                   <div className="flex gap-1">
                     <button
-                      onClick={() => reusePrompt(item.preview_text || item.title)}
+                      onClick={() => reusePrompt(promptText)}
                       className="text-[10px] text-[#5a9b82] hover:text-[#7bc4a8] transition-colors"
                     >
                       复用提示词
                     </button>
+                    <button
+                      onClick={() => copyPromptText(promptText)}
+                      className="text-[10px] text-[#9ca3af] hover:text-[#f5f5f5] transition-colors"
+                    >
+                      复制
+                    </button>
                   </div>
                 </div>
               </div>
-            ))}
+            );
+            })}
           </div>
         )}
       </motion.div>

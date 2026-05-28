@@ -15,7 +15,7 @@ export default function HistoryPage() {
         <div>
           <p className="eyebrow">Generation History</p>
           <h1 className="text-[28px] md:text-[36px] font-bold leading-[1.15] tracking-[-0.02em] text-[#f5f5f5]">
-            生成历史
+            生成记录
           </h1>
         </div>
       </motion.div>

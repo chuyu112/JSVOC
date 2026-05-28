@@ -76,7 +76,10 @@ def create_image_asset(
     access_url_expires_at: int | None = None,
 ) -> DigitalAsset:
     type_label = "图片" if asset_type == "image" else "视频" if asset_type == "video" else "生成内容"
+    clean_prompt = (prompt or "").strip()
     metadata = dict(asset_metadata or {})
+    if clean_prompt:
+        metadata.setdefault("prompt", clean_prompt)
     if project is not None:
         metadata.setdefault("source_project", build_project_snapshot(project))
     asset = DigitalAsset(
@@ -84,8 +87,9 @@ def create_image_asset(
         asset_type=asset_type,
         source_project_id=None,
         project_snapshot=build_account_asset_snapshot(user_id),
-        title=(prompt or f"生成{type_label}").strip()[:240] or f"生成{type_label}",
-        preview_text=(prompt or "").strip()[:240] or None,
+        title=(clean_prompt or f"生成{type_label}")[:240] or f"生成{type_label}",
+        preview_text=clean_prompt[:240] or None,
+        content_text=clean_prompt or None,
         generation_record_id=generation_record_id,
         oss_object_key=oss_object_key,
         mime_type=mime_type,

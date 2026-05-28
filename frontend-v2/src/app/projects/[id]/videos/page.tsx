@@ -36,6 +36,17 @@ function formatVideoTaskError(message: string | null | undefined) {
   return text;
 }
 
+function digitalAssetPrompt(asset: DigitalAsset) {
+  const metadataPrompt = asset.asset_metadata?.prompt;
+  return (
+    asset.content_text ||
+    (typeof metadataPrompt === "string" ? metadataPrompt : "") ||
+    asset.preview_text ||
+    asset.title ||
+    ""
+  ).trim();
+}
+
 interface VideoOptions {
   model: string;
   mode: "reference" | "keyframe";
@@ -515,6 +526,16 @@ export default function VideosPage() {
     }
   }, [projectId]);
 
+  async function copyText(text: string, successMessage: string) {
+    if (!text) return;
+    try {
+      await navigator.clipboard.writeText(text);
+      alert(successMessage);
+    } catch {
+      alert("复制失败");
+    }
+  }
+
   useEffect(() => {
     fetchAssets();
     fetchImageAssets();
@@ -789,7 +810,7 @@ export default function VideosPage() {
         </div>
         <div className="section-header-actions">
           <Link href={`/projects/${projectId}`} className="project-return-btn">
-            返回项目
+            返回人设
           </Link>
         </div>
       </motion.div>
@@ -1551,7 +1572,9 @@ export default function VideosPage() {
         >
           <h2 className="text-[18px] font-bold text-[#f5f5f5] mb-4">已生成视频</h2>
           <div className="flex flex-col gap-4 max-w-2xl mx-auto">
-            {assets.map((asset) => (
+            {assets.map((asset) => {
+              const promptText = digitalAssetPrompt(asset);
+              return (
               <div
                 key={asset.id}
                 className="glass card-hover rounded-[1rem] overflow-hidden"
@@ -1584,6 +1607,23 @@ export default function VideosPage() {
                       </span>
                     )}
                   </div>
+                  {promptText ? (
+                    <div className="rounded-[0.5rem] border border-[rgba(255,255,255,0.08)] bg-[rgba(255,255,255,0.03)] p-2">
+                      <div className="mb-1 flex items-center justify-between gap-2">
+                        <span className="text-[11px] font-medium text-[#9ccaa8]">提示词</span>
+                        <button
+                          type="button"
+                          onClick={() => copyText(promptText, "已复制提示词")}
+                          className="text-[11px] text-[#9ca3af] transition-colors hover:text-[#f5f5f5]"
+                        >
+                          复制
+                        </button>
+                      </div>
+                      <p className="line-clamp-3 text-[11px] leading-relaxed text-[#b0b0b0]" title={promptText}>
+                        {promptText}
+                      </p>
+                    </div>
+                  ) : null}
                   <p className="text-[11px] text-[#9ca3af]">
                     {new Date(asset.created_at + "Z").toLocaleString("zh-CN", { timeZone: "Asia/Shanghai" })}
                   </p>
@@ -1599,15 +1639,7 @@ export default function VideosPage() {
                         下载
                       </a>
                       <button
-                        onClick={() => {
-                          navigator.clipboard.writeText(asset.access_url!).then(() => {
-                            // eslint-disable-next-line no-alert
-                            alert("已复制链接");
-                          }).catch(() => {
-                            // eslint-disable-next-line no-alert
-                            alert("复制失败");
-                          });
-                        }}
+                        onClick={() => copyText(asset.access_url!, "已复制链接")}
                         className="text-[11px] px-2 py-1 rounded-md border transition-colors hover:bg-[rgba(255,255,255,0.06)]"
                         style={{ borderColor: "rgba(255,255,255,0.1)", color: "var(--jade-text-sub)" }}
                       >
@@ -1617,7 +1649,8 @@ export default function VideosPage() {
                   )}
                 </div>
               </div>
-            ))}
+            );
+            })}
           </div>
         </motion.div>
       )}
