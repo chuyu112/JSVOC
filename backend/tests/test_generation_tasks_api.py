@@ -319,6 +319,7 @@ class GenerationTasksApiTest(unittest.TestCase):
                     "prompt": "jade bracelet video",
                     "options": {"ratio": "9:16", "resolution": "1080p"},
                     "reference_images": ["https://assets.example.test/storyboard.png"],
+                    "reference_image_names": ["@图片1"],
                     "reference_videos": ["https://assets.example.test/reference.mp4"],
                     "reference_audios": ["https://assets.example.test/reference.mp3"],
                 },
@@ -341,6 +342,7 @@ class GenerationTasksApiTest(unittest.TestCase):
             self.assertEqual(task.user_id, 1)
             self.assertEqual(task.input_data["prompt"], "jade bracelet video")
             self.assertEqual(task.input_data["reference_images"], ["https://assets.example.test/storyboard.png"])
+            self.assertEqual(task.input_data["reference_image_names"], ["@图片1"])
             self.assertEqual(task.input_data["reference_videos"], ["https://assets.example.test/reference.mp4"])
             self.assertEqual(task.input_data["reference_audios"], ["https://assets.example.test/reference.mp3"])
 
@@ -349,6 +351,7 @@ class GenerationTasksApiTest(unittest.TestCase):
         self.assertEqual(scheduled_args[9], ["https://assets.example.test/storyboard.png"])
         self.assertEqual(scheduled_args[10], ["https://assets.example.test/reference.mp4"])
         self.assertEqual(scheduled_args[11], ["https://assets.example.test/reference.mp3"])
+        self.assertEqual(scheduled_args[12], ["@图片1"])
 
     def test_generate_video_async_uploads_inline_reference_media_before_queue(self) -> None:
         scheduled = []
@@ -680,6 +683,54 @@ class GenerationTasksApiTest(unittest.TestCase):
             )
 
         self.assertEqual(posted["json"]["resolution"], "480p")
+
+    def test_video_generation_binds_named_reference_images_in_prompt(self) -> None:
+        from app.core.config import Settings
+        from app.services import video_generation_service
+
+        posted = {}
+
+        def fake_post(endpoint, *, headers, json, timeout):
+            posted["json"] = json
+            return type(
+                "Response",
+                (),
+                {
+                    "status_code": 200,
+                    "raise_for_status": lambda self: None,
+                    "json": lambda self: {"id": "cgt-test-reference-names"},
+                },
+            )()
+
+        def fake_poll(*args, **kwargs):
+            return {"status": "succeeded", "video_url": "https://provider.example.test/video.mp4", "raw_response": {}}
+
+        settings = Settings(
+            VIDEO_GENERATION_BASE_URL="https://ark.example.test",
+            VIDEO_GENERATION_API_KEY="video-key",
+            VIDEO_GENERATION_MODEL="seedance-test",
+        )
+
+        with (
+            patch("app.services.video_generation_service.get_settings", return_value=settings),
+            patch("app.services.video_generation_service.post_video_request_with_retry", side_effect=fake_post),
+            patch("app.services.video_generation_service.poll_video_task", side_effect=fake_poll),
+        ):
+            video_generation_service.generate_video(
+                "@图片1 跟 @图片2 打架",
+                {"model": "seedance-test", "ratio": "16:9", "resolution": "720p"},
+                reference_images=[
+                    "https://assets.example.test/person-a.png",
+                    "https://assets.example.test/person-b.png",
+                ],
+                reference_image_names=["@图片1", "@图片2"],
+            )
+
+        text_parts = [item for item in posted["json"]["content"] if item["type"] == "text"]
+        self.assertEqual(len(text_parts), 1)
+        self.assertIn("@图片1：第 1 张参考图片。", text_parts[0]["text"])
+        self.assertIn("@图片2：第 2 张参考图片。", text_parts[0]["text"])
+        self.assertIn("让 @图片1 的主体和 @图片2 的主体发生打架动作", text_parts[0]["text"])
 
     def test_recover_video_generation_task_persists_completed_provider_result(self) -> None:
         from app.api.video_generation import recover_interrupted_video_generation_tasks

@@ -166,8 +166,8 @@ function topicText(topic: Topic) {
     `拍摄建议：${topic.topic_data.shooting_suggestion}`,
     `转化方式：${topic.topic_data.conversion_method}`,
     topic.topic_data.shooting_script ? `拍摄脚本：${topic.topic_data.shooting_script}` : '',
-    topic.topic_data.seeddance_video_prompt
-      ? `SeedDance 参考生视频提示词：${topic.topic_data.seeddance_video_prompt}`
+    topic.topic_data.seedance_video_prompt
+      ? `SeedDance 参考生视频提示词：${topic.topic_data.seedance_video_prompt}`
       : '',
     topic.topic_data.image_prompt ? `图片生成提示词：${topic.topic_data.image_prompt}` : '',
     topic.topic_data.image_edit_prompt
@@ -440,9 +440,9 @@ onMounted(async () => {
                 <dt>拍摄脚本</dt>
                 <dd>{{ topic.topic_data.shooting_script }}</dd>
               </template>
-              <template v-if="topic.topic_data.seeddance_video_prompt">
+              <template v-if="topic.topic_data.seedance_video_prompt">
                 <dt>SeedDance 参考生视频提示词</dt>
-                <dd>{{ topic.topic_data.seeddance_video_prompt }}</dd>
+                <dd>{{ topic.topic_data.seedance_video_prompt }}</dd>
               </template>
               <template v-if="topic.topic_data.image_prompt">
                 <dt>图片生成提示词</dt>
@@ -499,10 +499,10 @@ onMounted(async () => {
                 生成文案
               </el-button>
               <el-button
-                v-if="topic.topic_data.seeddance_video_prompt"
+                v-if="topic.topic_data.seedance_video_prompt"
                 size="small"
                 type="primary"
-                @click="openVideoGenerationPage(topic.topic_data.seeddance_video_prompt)"
+                @click="openVideoGenerationPage(topic.topic_data.seedance_video_prompt)"
               >
                 去生视频
               </el-button>

@@ -244,6 +244,22 @@ function SliderField({
   );
 }
 
+const IMAGE_REFERENCE_PATTERN = /@图片(\d+)/g;
+
+function normalizeImageReferenceName(value: string | undefined) {
+  if (!value) return "";
+  const match = value.trim().match(/^@?图片(\d+)$/);
+  return match ? `@图片${Number(match[1])}` : "";
+}
+
+function extractImageReferenceNames(text: string) {
+  const names = new Set<string>();
+  for (const match of text.matchAll(IMAGE_REFERENCE_PATTERN)) {
+    names.add(`@图片${Number(match[1])}`);
+  }
+  return names;
+}
+
 const SEEDANCE_STANDARD_MODEL = "doubao-seedance-2-0-260128";
 const SEEDANCE_FAST_MODEL = "doubao-seedance-2-0-fast-260128";
 const FALLBACK_VIDEO_MODELS: VideoModelConfig[] = [
@@ -391,6 +407,8 @@ export default function VideosPage() {
     name: string;
     dataUrl: string;
     type: string;
+    selected: boolean;
+    referenceName?: string;
   }
   const [referenceMedias, setReferenceMedias] = useState<ReferenceMedia[]>([]);
   const firstFrameRef = useRef<HTMLInputElement>(null);
@@ -438,6 +456,17 @@ export default function VideosPage() {
   const selectedVideoModel =
     selectableVideoModels.find((model) => model.value === options.model) || selectableVideoModels[0];
   const selectedResolutions = selectedVideoModel.resolutions.length > 0 ? selectedVideoModel.resolutions : ["480p"];
+  const promptImageReferenceNames = extractImageReferenceNames(prompt);
+  const activeReferenceMedias = referenceMedias.filter(
+    (media) =>
+      media.selected ||
+      (media.type === "图片" &&
+        Boolean(media.referenceName) &&
+        promptImageReferenceNames.has(normalizeImageReferenceName(media.referenceName))),
+  );
+  const unknownPromptImageReferences = Array.from(promptImageReferenceNames).filter(
+    (name) => !referenceMedias.some((media) => normalizeImageReferenceName(media.referenceName) === name),
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -725,13 +754,16 @@ export default function VideosPage() {
             ? "音频"
             : "图片";
         setReferenceMedias((prev) => {
+          const name = nextReferenceMediaName(prev, typePrefix);
           return [
             ...prev,
             {
               id: `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
-              name: nextReferenceMediaName(prev, typePrefix),
+              name,
               dataUrl,
               type: typePrefix,
+              selected: true,
+              referenceName: typePrefix === "图片" ? `@${name}` : undefined,
             },
           ];
         });
@@ -741,15 +773,19 @@ export default function VideosPage() {
   }
 
   function removeReferenceMedia(id: string) {
-    setReferenceMedias((prev) => {
-      const filtered = prev.filter((m) => m.id !== id);
-      // Re-number remaining items by type
-      const counts: Record<string, number> = {};
-      return filtered.map((m) => {
-        counts[m.type] = (counts[m.type] || 0) + 1;
-        return { ...m, name: `${m.type}${counts[m.type]}` };
-      });
-    });
+    setReferenceMedias((prev) => prev.filter((m) => m.id !== id));
+  }
+
+  function toggleReferenceMedia(id: string) {
+    setReferenceMedias((prev) =>
+      prev.map((m) => (m.id === id ? { ...m, selected: !m.selected } : m)),
+    );
+  }
+
+  function appendReferenceMention(referenceName: string | undefined) {
+    const normalized = normalizeImageReferenceName(referenceName);
+    if (!normalized) return;
+    setPrompt((prev) => `${prev}${prev.trim() ? " " : ""}${normalized}`);
   }
 
   async function handleSubmit() {
@@ -778,10 +814,18 @@ export default function VideosPage() {
       if (options.mode === "keyframe") {
         if (firstFrame) apiOptions.first_frame = firstFrame;
         if (lastFrame) apiOptions.last_frame = lastFrame;
-      } else if (options.mode === "reference" && referenceMedias.length > 0) {
-        apiOptions.reference_images = referenceMedias.filter((m) => m.type === "图片").map((m) => m.dataUrl);
-        apiOptions.reference_videos = referenceMedias.filter((m) => m.type === "视频").map((m) => m.dataUrl);
-        apiOptions.reference_audios = referenceMedias.filter((m) => m.type === "音频").map((m) => m.dataUrl);
+      } else if (options.mode === "reference") {
+        if (unknownPromptImageReferences.length > 0) {
+          alert(`这些图片引用不存在：${unknownPromptImageReferences.join("、")}`);
+          return;
+        }
+        if (activeReferenceMedias.length > 0) {
+          const imageReferences = activeReferenceMedias.filter((m) => m.type === "图片");
+          apiOptions.reference_images = imageReferences.map((m) => m.dataUrl);
+          apiOptions.reference_image_names = imageReferences.map((m) => normalizeImageReferenceName(m.referenceName));
+          apiOptions.reference_videos = activeReferenceMedias.filter((m) => m.type === "视频").map((m) => m.dataUrl);
+          apiOptions.reference_audios = activeReferenceMedias.filter((m) => m.type === "音频").map((m) => m.dataUrl);
+        }
       }
       const res = await generateVideoAsync(projectId, prompt.trim(), apiOptions);
       setTask({ id: res.task_id, status: res.status as TaskStatus["status"], result_data: null, error_message: null });
@@ -908,14 +952,16 @@ export default function VideosPage() {
                             onClick={() => {
                               const typePrefix = "图片";
                               setReferenceMedias((prev) => {
-                                const nextNum = prev.filter((m) => m.type === typePrefix).length + 1;
+                                const name = nextReferenceMediaName(prev, typePrefix);
                                 return [
                                   ...prev,
                                   {
                                     id: `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
-                                    name: `${typePrefix}${nextNum}`,
+                                    name,
                                     dataUrl: mi.url,
                                     type: typePrefix,
+                                    selected: true,
+                                    referenceName: `@${name}`,
                                   },
                                 ];
                               });
@@ -964,14 +1010,15 @@ export default function VideosPage() {
                             const url = asset.access_url;
                             if (!url) return;
                             setReferenceMedias((prev) => {
-                              const nextNum = prev.filter((m) => m.type === "视频").length + 1;
+                              const name = nextReferenceMediaName(prev, "视频");
                               return [
                                 ...prev,
                                 {
                                   id: `asset_video_${asset.id}`,
-                                  name: `视频${nextNum}`,
+                                  name,
                                   dataUrl: url,
                                   type: "视频",
+                                  selected: true,
                                 },
                               ];
                             });
@@ -1067,19 +1114,39 @@ export default function VideosPage() {
                   </button>
                   {referenceMedias.length > 0 && (
                     <div className="flex flex-col gap-1.5 w-16">
-                      {referenceMedias.map((m) => (
-                        <button
+                      {referenceMedias.map((m) => {
+                        const isActive =
+                          m.selected ||
+                          (m.type === "图片" &&
+                            Boolean(m.referenceName) &&
+                            promptImageReferenceNames.has(normalizeImageReferenceName(m.referenceName)));
+                        return (
+                        <div
                           key={m.id}
-                          onClick={() => removeReferenceMedia(m.id)}
-                          className="flat-delete-target relative w-16 h-16 rounded-[0.5rem] overflow-hidden border border-[rgba(255,255,255,0.08)] shrink-0"
-                          title={`删除 ${m.name}`}
+                          onClick={() => toggleReferenceMedia(m.id)}
+                          className="flat-delete-target relative w-16 h-16 cursor-pointer rounded-[0.5rem] overflow-hidden border shrink-0 transition-colors"
+                          style={{
+                            borderColor: isActive ? "rgba(127,220,146,0.5)" : "rgba(255,255,255,0.08)",
+                            background: isActive ? "rgba(127,220,146,0.08)" : "rgba(255,255,255,0.03)",
+                          }}
+                          role="button"
+                          tabIndex={0}
+                          title={`${isActive ? "取消选择" : "选择"} ${m.name}`}
                         >
                           {m.type === "图片" ? (
                             <>
                               <img src={m.dataUrl} alt={m.name} className="w-full h-full object-cover" />
-                              <span className="absolute left-1 bottom-1 max-w-[calc(100%-0.5rem)] rounded-[0.25rem] bg-[rgba(0,0,0,0.58)] px-1.5 py-0.5 text-[10px] leading-none font-medium text-white shadow-sm truncate">
-                                {m.name}
-                              </span>
+                              <button
+                                type="button"
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  appendReferenceMention(m.referenceName);
+                                }}
+                                className="absolute left-1 bottom-1 max-w-[calc(100%-0.5rem)] rounded-[0.25rem] bg-[rgba(0,0,0,0.62)] px-1.5 py-0.5 text-[10px] leading-none font-medium text-white shadow-sm truncate"
+                                title={`插入 ${m.referenceName || `@${m.name}`}`}
+                              >
+                                {m.referenceName || `@${m.name}`}
+                              </button>
                             </>
                           ) : (
                             <div className="w-full h-full flex flex-col items-center justify-center gap-0.5 bg-[rgba(255,255,255,0.04)]">
@@ -1100,11 +1167,20 @@ export default function VideosPage() {
                               <span className="text-[9px] text-[#9ca3af] truncate px-1 w-full text-center">{m.name}</span>
                             </div>
                           )}
-                          <span className="flat-delete-action">
+                          <span
+                            className="flat-delete-action"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              removeReferenceMedia(m.id);
+                            }}
+                            role="button"
+                            tabIndex={0}
+                          >
                             <X size={13} weight="bold" />
                           </span>
-                        </button>
-                      ))}
+                        </div>
+                        );
+                      })}
                     </div>
                   )}
                 </div>
@@ -1214,7 +1290,7 @@ export default function VideosPage() {
                 value={prompt}
                 onChange={setPrompt}
                 referenceMedias={referenceMedias}
-                placeholder="输入你想要生成的内容画面，或结合图片输入创意描述（可选）"
+                placeholder="@图片1 跟 @图片2 打架，镜头稳定跟拍，动作激烈但不血腥"
               />
 
               {/* Actions + cost */}
@@ -1247,10 +1323,10 @@ export default function VideosPage() {
             {/* @ citation hint */}
             {options.mode === "reference" && referenceMedias.length > 0 && (
               <p className="mt-3 text-[12px] text-[#6b7280] leading-relaxed">
-                使用@可快速引用上传的文件，如：参考
+                本次使用 {activeReferenceMedias.length} / {referenceMedias.length} 个素材。使用@可快速引用上传的文件，如：参考
                 {referenceMedias.map((m, idx) => (
                   <span key={m.id}>
-                    {idx > 0 && "和"}@{m.name}
+                    {idx > 0 && "和"}{m.referenceName || `@${m.name}`}
                   </span>
                 ))}
                 中的内容生成视频。

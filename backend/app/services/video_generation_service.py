@@ -28,6 +28,7 @@ def generate_video(
     reference_images: list[str] | None = None,
     reference_videos: list[str] | None = None,
     reference_audios: list[str] | None = None,
+    reference_image_names: list[str] | None = None,
     on_provider_task_created: Callable[[dict[str, Any]], None] | None = None,
     db: Session | None = None,
 ) -> dict[str, Any]:
@@ -47,6 +48,12 @@ def generate_video(
         headers["Authorization"] = f"Bearer {api_key}"
 
     endpoint = f"{base_url.rstrip('/')}/api/v3/contents/generations/tasks"
+
+    prompt = build_video_reference_prompt(
+        prompt,
+        reference_image_names=reference_image_names,
+        reference_images=reference_images,
+    )
 
     content: list[dict[str, Any]] = [{"type": "text", "text": prompt}]
     if reference_media:
@@ -133,6 +140,43 @@ def generate_video(
         "latency_ms": elapsed_ms(started_at),
         "raw_response": result.get("raw_response"),
     }
+
+
+def build_video_reference_prompt(
+    prompt: str,
+    *,
+    reference_image_names: list[str] | None = None,
+    reference_images: list[str] | None = None,
+) -> str:
+    cleaned_prompt = prompt.strip()
+    image_count = len(reference_images or [])
+    if image_count < 1:
+        return cleaned_prompt
+
+    names = normalized_reference_image_names(reference_image_names, image_count)
+    prompt_has_reference_mentions = any(name in cleaned_prompt for name in names)
+    if not prompt_has_reference_mentions and "@图片" not in cleaned_prompt:
+        return cleaned_prompt
+
+    rules = [
+        "视频参考图绑定规则：",
+        "如果提示词出现 @图片1、@图片2 等引用，必须严格按下方同名参考图绑定主体、人物、货品或场景。",
+        "例：@图片1 跟 @图片2 打架 = 让 @图片1 的主体和 @图片2 的主体发生打架动作，不要把两张图混成同一个主体。",
+        "保持每张参考图的主体身份、外观、服装/产品特征和关键视觉差异；动作可以按提示词重新编排。",
+    ]
+    rules.extend(f"{name}：第 {index} 张参考图片。" for index, name in enumerate(names, start=1))
+    return f"{cleaned_prompt}\n\n" + "\n".join(rules)
+
+
+def normalized_reference_image_names(reference_image_names: list[str] | None, image_count: int) -> list[str]:
+    names: list[str] = []
+    for index in range(image_count):
+        raw_name = (reference_image_names or [])[index] if index < len(reference_image_names or []) else ""
+        cleaned = str(raw_name or "").strip()
+        if not cleaned:
+            cleaned = f"图片{index + 1}"
+        names.append(cleaned if cleaned.startswith("@") else f"@{cleaned}")
+    return names
 
 
 def poll_video_task(

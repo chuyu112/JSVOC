@@ -25,6 +25,7 @@ class ImageGenerateRequest(BaseModel):
 
 class ImageReferenceInput(BaseModel):
     reference_image_type: ImageReferenceType
+    reference_image_name: str | None = Field(default=None, max_length=40)
     source_image_base64: str = Field(min_length=1, max_length=20_000_000)
     source_image_mime: str = Field(default="image/png", min_length=1, max_length=80)
     source_image_filename: str = Field(default="source.png", min_length=1, max_length=160)

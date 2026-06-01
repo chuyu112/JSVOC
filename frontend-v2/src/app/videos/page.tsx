@@ -36,6 +36,8 @@ interface ReferenceMedia {
   name: string;
   dataUrl: string;
   type: "图片" | "视频" | "音频";
+  selected: boolean;
+  referenceName?: string;
 }
 
 interface VideoOptions {
@@ -118,6 +120,22 @@ function readFileAsDataUrl(file: File): Promise<string> {
   });
 }
 
+const IMAGE_REFERENCE_PATTERN = /@图片(\d+)/g;
+
+function normalizeImageReferenceName(value: string | undefined) {
+  if (!value) return "";
+  const match = value.trim().match(/^@?图片(\d+)$/);
+  return match ? `@图片${Number(match[1])}` : "";
+}
+
+function extractImageReferenceNames(text: string) {
+  const names = new Set<string>();
+  for (const match of text.matchAll(IMAGE_REFERENCE_PATTERN)) {
+    names.add(`@图片${Number(match[1])}`);
+  }
+  return names;
+}
+
 export default function VideosEntryPage() {
   const [prompt, setPrompt] = useState("");
   const [referenceMedias, setReferenceMedias] = useState<ReferenceMedia[]>([]);
@@ -137,6 +155,25 @@ export default function VideosEntryPage() {
   const selectedResolutions = selectedVideoModel.resolutions.length > 0 ? selectedVideoModel.resolutions : ["480p"];
   const isRunning = submitting || task?.status === "queued" || task?.status === "running";
   const videoUrl = task?.result_data?.video_url as string | undefined;
+  const promptImageReferenceNames = extractImageReferenceNames(prompt);
+  const activeReferenceMedias = referenceMedias.filter(
+    (media) =>
+      media.selected ||
+      (media.type === "图片" &&
+        Boolean(media.referenceName) &&
+        promptImageReferenceNames.has(normalizeImageReferenceName(media.referenceName))),
+  );
+  const unknownPromptImageReferences = Array.from(promptImageReferenceNames).filter(
+    (name) => !referenceMedias.some((media) => normalizeImageReferenceName(media.referenceName) === name),
+  );
+
+  function nextReferenceImageName(existing: ReferenceMedia[]) {
+    const maxNumber = existing.reduce((max, media) => {
+      const match = normalizeImageReferenceName(media.referenceName).match(/^@图片(\d+)$/);
+      return match ? Math.max(max, Number(match[1])) : max;
+    }, 0);
+    return `@图片${maxNumber + 1}`;
+  }
 
   useEffect(() => {
     let cancelled = false;
@@ -214,11 +251,14 @@ export default function VideosEntryPage() {
       const type = getMediaType(file);
       if (!type) continue;
       const dataUrl = await readFileAsDataUrl(file);
+      const referenceName = type === "图片" ? nextReferenceImageName([...referenceMedias, ...next]) : undefined;
       next.push({
         id: `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
-        name: `${type}${referenceMedias.filter((item) => item.type === type).length + next.filter((item) => item.type === type).length + 1}`,
+        name: referenceName ? referenceName.slice(1) : `${type}${referenceMedias.filter((item) => item.type === type).length + next.filter((item) => item.type === type).length + 1}`,
         type,
         dataUrl,
+        selected: true,
+        referenceName,
       });
     }
     if (next.length) setReferenceMedias((prev) => [...prev, ...next]);
@@ -226,6 +266,21 @@ export default function VideosEntryPage() {
 
   function removeReferenceMedia(id: string) {
     setReferenceMedias((prev) => prev.filter((item) => item.id !== id));
+  }
+
+  function toggleReferenceMedia(id: string) {
+    setReferenceMedias((prev) =>
+      prev.map((item) => (item.id === id ? { ...item, selected: !item.selected } : item)),
+    );
+  }
+
+  function appendReferenceMention(referenceName: string | undefined) {
+    const normalized = normalizeImageReferenceName(referenceName);
+    if (!normalized) return;
+    setPrompt((prev) => {
+      const suffix = prev.trim() ? ` ${normalized}` : normalized;
+      return `${prev}${suffix}`;
+    });
   }
 
   async function handleEnhance() {
@@ -274,10 +329,16 @@ export default function VideosEntryPage() {
         web_search: options.web_search,
         timeout_hours: options.timeout_hours,
       };
-      if (referenceMedias.length > 0) {
-        apiOptions.reference_images = referenceMedias.filter((m) => m.type === "图片").map((m) => m.dataUrl);
-        apiOptions.reference_videos = referenceMedias.filter((m) => m.type === "视频").map((m) => m.dataUrl);
-        apiOptions.reference_audios = referenceMedias.filter((m) => m.type === "音频").map((m) => m.dataUrl);
+      if (unknownPromptImageReferences.length > 0) {
+        alert(`这些图片引用不存在：${unknownPromptImageReferences.join("、")}`);
+        return;
+      }
+      if (activeReferenceMedias.length > 0) {
+        const imageReferences = activeReferenceMedias.filter((m) => m.type === "图片");
+        apiOptions.reference_images = imageReferences.map((m) => m.dataUrl);
+        apiOptions.reference_image_names = imageReferences.map((m) => normalizeImageReferenceName(m.referenceName));
+        apiOptions.reference_videos = activeReferenceMedias.filter((m) => m.type === "视频").map((m) => m.dataUrl);
+        apiOptions.reference_audios = activeReferenceMedias.filter((m) => m.type === "音频").map((m) => m.dataUrl);
       }
 
       const res = await generateVideoAsync(null, prompt.trim(), apiOptions);
@@ -318,7 +379,7 @@ export default function VideosEntryPage() {
               <label className="text-[12px] font-[540] text-[#9ca3af] mb-1.5 block">提示词</label>
               <textarea
                 className="input-glass w-full min-h-[180px] resize-y leading-7"
-                placeholder="输入视频生成提示词"
+                placeholder="@图片1 跟 @图片2 打架，镜头稳定跟拍，动作激烈但不血腥"
                 value={prompt}
                 onChange={(event) => setPrompt(event.target.value)}
               />
@@ -345,10 +406,27 @@ export default function VideosEntryPage() {
 
             {referenceMedias.length > 0 && (
               <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-                {referenceMedias.map((media) => (
-                  <div key={media.id} className="flat-delete-target border border-[rgba(255,255,255,0.06)] bg-[rgba(255,255,255,0.03)] p-2">
+                {referenceMedias.map((media) => {
+                  const isActive =
+                    media.selected ||
+                    (media.type === "图片" &&
+                      Boolean(media.referenceName) &&
+                      promptImageReferenceNames.has(normalizeImageReferenceName(media.referenceName)));
+                  return (
+                  <div
+                    key={media.id}
+                    onClick={() => toggleReferenceMedia(media.id)}
+                    className="flat-delete-target cursor-pointer border p-2 transition-colors"
+                    style={{
+                      borderColor: isActive ? "rgba(127,220,146,0.45)" : "rgba(255,255,255,0.06)",
+                      background: isActive ? "rgba(127,220,146,0.1)" : "rgba(255,255,255,0.03)",
+                    }}
+                  >
                     <button
-                      onClick={() => removeReferenceMedia(media.id)}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        removeReferenceMedia(media.id);
+                      }}
                       className="flat-delete-action"
                       title="删除"
                       aria-label="删除参考素材"
@@ -362,9 +440,33 @@ export default function VideosEntryPage() {
                     ) : (
                       <div className="h-20 flex items-center justify-center text-[12px] text-[#9ca3af]">音频</div>
                     )}
-                    <div className="mt-1 text-[11px] text-[#9ca3af]">{media.name}</div>
+                    <div className="mt-1 flex items-center justify-between gap-1">
+                      {media.referenceName ? (
+                        <button
+                          type="button"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            appendReferenceMention(media.referenceName);
+                          }}
+                          className="rounded bg-[rgba(99,102,241,0.18)] px-1.5 py-0.5 text-[10px] font-semibold text-[#c7d2fe]"
+                          title={`插入 ${media.referenceName}`}
+                        >
+                          {media.referenceName}
+                        </button>
+                      ) : (
+                        <span className="text-[11px] text-[#9ca3af]">{media.name}</span>
+                      )}
+                      <span className="text-[10px] text-[#6b7280]">{isActive ? "已选" : "未选"}</span>
+                    </div>
                   </div>
-                ))}
+                  );
+                })}
+              </div>
+            )}
+
+            {referenceMedias.length > 0 && (
+              <div className="text-[12px] text-[#6b7280]">
+                本次使用 {activeReferenceMedias.length} / {referenceMedias.length} 个素材。点击素材可选中/取消，点击 @图片N 可插入提示词。
               </div>
             )}
 

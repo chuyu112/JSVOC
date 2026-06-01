@@ -37,6 +37,7 @@ interface LocalReferenceImage extends ImageReferenceInput {
   id: string;
   preview: string;
   backendId?: number;
+  selected: boolean;
 }
 
 interface TaskStatus {
@@ -137,6 +138,22 @@ function imageDisplayUrl(image: GeneratedImage | undefined) {
   return image.url || image.data_url || (image.b64_json ? `data:${image.mime_type || "image/png"};base64,${image.b64_json}` : "");
 }
 
+const IMAGE_REFERENCE_PATTERN = /@图片(\d+)/g;
+
+function normalizeImageReferenceName(value: string | undefined) {
+  if (!value) return "";
+  const match = value.trim().match(/^@?图片(\d+)$/);
+  return match ? `@图片${Number(match[1])}` : "";
+}
+
+function extractImageReferenceNames(text: string) {
+  const names = new Set<string>();
+  for (const match of text.matchAll(IMAGE_REFERENCE_PATTERN)) {
+    names.add(`@图片${Number(match[1])}`);
+  }
+  return names;
+}
+
 export default function ImagesPage() {
   const router = useRouter();
   const params = useParams();
@@ -199,6 +216,7 @@ export default function ImagesPage() {
           product: [],
           location: [],
         };
+        let referenceIndex = 1;
         for (const img of images) {
           const type = img.reference_image_type as RefType;
           if (!byType[type]) continue;
@@ -212,8 +230,11 @@ export default function ImagesPage() {
             source_image_base64: img.source_image_base64,
             source_image_mime: img.source_image_mime,
             source_image_filename: img.source_image_filename,
+            reference_image_name: `@图片${referenceIndex}`,
             preview: prefix + img.source_image_base64,
+            selected: true,
           });
+          referenceIndex += 1;
         }
         setReferenceImages(byType);
       })
@@ -238,6 +259,17 @@ export default function ImagesPage() {
   }, [searchParams]);
 
   const currentPrompt = mode === "text" ? textPrompt : editPrompt;
+  const flatReferenceImages = Object.values(referenceImages).flat();
+  const promptImageReferenceNames = extractImageReferenceNames(editPrompt);
+  const activeReferenceImages = flatReferenceImages.filter(
+    (img) =>
+      img.selected ||
+      (Boolean(img.reference_image_name) &&
+        promptImageReferenceNames.has(normalizeImageReferenceName(img.reference_image_name))),
+  );
+  const unknownPromptImageReferences = Array.from(promptImageReferenceNames).filter(
+    (name) => !flatReferenceImages.some((img) => normalizeImageReferenceName(img.reference_image_name) === name),
+  );
   function updatePrompt(value: string) {
     if (mode === "text") setTextPrompt(value);
     else setEditPrompt(value);
@@ -248,6 +280,27 @@ export default function ImagesPage() {
   }
 
   const totalRefCount = Object.values(referenceImages).reduce((sum, arr) => sum + arr.length, 0);
+
+  function nextReferenceImageName(existing: LocalReferenceImage[]) {
+    const maxNumber = existing.reduce((max, img) => {
+      const match = normalizeImageReferenceName(img.reference_image_name).match(/^@图片(\d+)$/);
+      return match ? Math.max(max, Number(match[1])) : max;
+    }, 0);
+    return `@图片${maxNumber + 1}`;
+  }
+
+  function toggleReferenceImage(type: RefType, id: string) {
+    setReferenceImages((prev) => ({
+      ...prev,
+      [type]: prev[type].map((img) => (img.id === id ? { ...img, selected: !img.selected } : img)),
+    }));
+  }
+
+  function appendReferenceMention(referenceName: string | undefined) {
+    const normalized = normalizeImageReferenceName(referenceName);
+    if (!normalized) return;
+    setEditPrompt((prev) => `${prev}${prev.trim() ? " " : ""}${normalized}`);
+  }
 
   async function handleReferenceImageChange(event: React.ChangeEvent<HTMLInputElement>, type: RefType) {
     const files = Array.from(event.target.files || []);
@@ -278,6 +331,7 @@ export default function ImagesPage() {
           source_image_mime: file.type || "image/png",
           source_image_filename: file.name || "source.png",
         });
+        const referenceName = nextReferenceImageName([...Object.values(referenceImages).flat(), ...newImages]);
         newImages.push({
           id: `backend-${persisted.id}`,
           backendId: persisted.id,
@@ -285,7 +339,9 @@ export default function ImagesPage() {
           source_image_base64: persisted.source_image_base64,
           source_image_mime: persisted.source_image_mime,
           source_image_filename: persisted.source_image_filename,
+          reference_image_name: referenceName,
           preview: dataUrl,
+          selected: true,
         });
       } catch {
         alert("参考图上传失败");
@@ -391,6 +447,14 @@ export default function ImagesPage() {
       alert("图片生成至少要上传一张参考图");
       return;
     }
+    if (mode === "image" && unknownPromptImageReferences.length > 0) {
+      alert(`这些图片引用不存在：${unknownPromptImageReferences.join("、")}`);
+      return;
+    }
+    if (mode === "image" && activeReferenceImages.length < 1) {
+      alert("请至少选中一张参考图，或在提示词中引用 @图片N");
+      return;
+    }
 
     setGenerating(true);
     setTask(null);
@@ -404,7 +468,7 @@ export default function ImagesPage() {
           ? await editImageAsync(
               projectId,
               cleanPrompt,
-              Object.values(referenceImages).flat().map(({ id, preview, ...rest }) => rest),
+              activeReferenceImages.map(({ id, preview, backendId, selected, ...rest }) => rest),
               n,
               size,
               quality
@@ -654,14 +718,39 @@ export default function ImagesPage() {
 
                   {refsByType(type).length > 0 && (
                     <div className="flex flex-wrap gap-2">
-                      {refsByType(type).map((img) => (
+                      {refsByType(type).map((img) => {
+                        const isActive =
+                          img.selected ||
+                          promptImageReferenceNames.has(normalizeImageReferenceName(img.reference_image_name));
+                        return (
                         <div
                           key={img.id}
-                          className="flat-delete-target w-[56px] h-[56px] rounded-[0.45rem] overflow-hidden border border-[rgba(255,255,255,0.06)]"
+                          onClick={() => toggleReferenceImage(type, img.id)}
+                          className="flat-delete-target w-[68px] h-[68px] cursor-pointer rounded-[0.45rem] overflow-hidden border transition-colors"
+                          style={{
+                            borderColor: isActive ? "rgba(127,220,146,0.5)" : "rgba(255,255,255,0.06)",
+                            background: isActive ? "rgba(127,220,146,0.08)" : "rgba(255,255,255,0.03)",
+                          }}
                         >
                           <img src={img.preview} alt={img.source_image_filename} className="w-full h-full object-cover" />
+                          {img.reference_image_name ? (
+                            <button
+                              type="button"
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                appendReferenceMention(img.reference_image_name);
+                              }}
+                              className="absolute left-1 bottom-1 rounded bg-[rgba(0,0,0,0.62)] px-1.5 py-0.5 text-[10px] font-semibold leading-none text-white"
+                              title={`插入 ${img.reference_image_name}`}
+                            >
+                              {img.reference_image_name}
+                            </button>
+                          ) : null}
                           <button
-                            onClick={() => removeReferenceImage(type, img.id)}
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              removeReferenceImage(type, img.id);
+                            }}
                             className="flat-delete-action"
                             title="删除"
                             aria-label="删除参考图"
@@ -669,7 +758,8 @@ export default function ImagesPage() {
                             <X size={13} weight="bold" />
                           </button>
                         </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   )}
 
@@ -705,10 +795,15 @@ export default function ImagesPage() {
                 <label className="text-[12px] font-[540] text-[#9ca3af] mb-1.5 block">图片提示词</label>
                 <textarea
                   className="input-glass w-full min-h-[340px] resize-y leading-7"
-                  placeholder="描述你想生成的图片内容..."
+                  placeholder="@图片1 和 @图片2 一起去 @图片3 吃饭，保持各自外观特征和场景关系"
                   value={editPrompt}
                   onChange={(e) => setEditPrompt(e.target.value)}
                 />
+                {totalRefCount > 0 && (
+                  <p className="mt-2 text-[12px] text-[#6b7280]">
+                    本次使用 {activeReferenceImages.length} / {totalRefCount} 张参考图。点击图片可选中/取消，点击 @图片N 可插入提示词。
+                  </p>
+                )}
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-3">
                   <GlassSelect
                     label="尺寸"

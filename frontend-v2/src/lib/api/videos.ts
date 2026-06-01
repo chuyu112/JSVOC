@@ -50,6 +50,7 @@ export async function generateVideoAsync(
     "reference_media",
     "reference_medias",
     "reference_images",
+    "reference_image_names",
     "reference_videos",
     "reference_audios",
   ]) {

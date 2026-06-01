@@ -40,6 +40,7 @@ export interface ImageReferenceInput {
   source_image_base64: string;
   source_image_mime: string;
   source_image_filename: string;
+  reference_image_name?: string;
 }
 
 export async function generateImage(

@@ -92,6 +92,40 @@ items、provider、model、usage、sources、latency_ms、generation_record_id�
 - 返回的 `items` 包含标题、来源链接、公开指标、爆点判断、钩子、内容结构、二创角度、洗稿简报和风险提醒。
 - 该接口不直接搬运原视频，只输出合规拆解和二创方向。
 
+## 6.2 图片生成 / 图生图
+
+POST /api/creation/images/generate/async
+
+请求：
+
+{"project_id": 1, "prompt": "生成一张翡翠手镯产品图", "size": "1536x1024", "quality": "medium", "n": 1}
+
+POST /api/creation/images/edit/async
+
+请求：
+
+{"project_id": 1, "prompt": "@图片1 和 @图片2 一起去 @图片3 吃饭", "reference_images": [{"reference_image_type": "persona", "reference_image_name": "@图片1", "source_image_base64": "...", "source_image_mime": "image/png", "source_image_filename": "person-a.png"}], "size": "1536x1024", "quality": "medium", "n": 1}
+
+说明：
+
+- `reference_image_type` 可选 `persona`、`product`、`location`，分别表示人设、货品、场景参考图。
+- `reference_image_name` 用于前端和提示词绑定，建议使用 `@图片1`、`@图片2` 这类全局编号。
+- 图生图至少需要 1 张参考图；每类参考图最多 3 张。
+
+## 6.3 视频生成
+
+POST /api/creation/videos/generate/async
+
+请求：
+
+{"project_id": 1, "prompt": "@图片1 跟 @图片2 打架，镜头稳定跟拍，动作激烈但不血腥", "options": {"mode": "reference", "ratio": "16:9", "resolution": "720p", "duration_mode": "seconds", "duration_seconds": 5, "count": 1}, "reference_images": ["data:image/png;base64,..."], "reference_image_names": ["@图片1", "@图片2"], "reference_videos": []}
+
+说明：
+
+- `reference_image_names` 与 `reference_images` 按顺序一一对应，用于把提示词里的 `@图片1`、`@图片2` 绑定到具体参考图。
+- 前端只提交选中或被 `@图片N` 引用的素材。
+- 上传的本地参考图片/视频会先转存 OSS，再提交给视频模型；未配置 OSS 时不能使用本地上传素材。
+
 ## 7. 生成历史
 
 GET /api/generation-records

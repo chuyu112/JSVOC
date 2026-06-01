@@ -31,6 +31,8 @@ const mode = ref<'text' | 'image'>('text')
 interface LocalReferenceImage extends ImageReferencePayload {
   id: string
   preview: string
+  selected: boolean
+  reference_image_name: string
 }
 
 const referenceImages = ref<LocalReferenceImage[]>([])
@@ -73,10 +75,60 @@ const previewSrc = computed(() => {
   const image = result.value?.images?.[0]
   return image?.data_url || image?.url || ''
 })
-const referenceImageCount = computed(() => referenceImages.value.length)
+const promptReferenceNames = computed(() => extractReferenceImageNames(stripReferencePromptBlock(prompt.value)))
+const activeReferenceImages = computed(() => {
+  const promptNames = promptReferenceNames.value
+  return referenceImages.value.filter(
+    (image) => image.selected || promptNames.has(normalizeReferenceImageName(image.reference_image_name)),
+  )
+})
+const activeReferenceImageCount = computed(() => activeReferenceImages.value.length)
 
 function projectId() {
   return Number(route.params.id)
+}
+
+function normalizeReferenceImageName(value: string) {
+  return value.trim().replace(/^@/, '')
+}
+
+function normalizeReferenceImageIndex(value: string) {
+  return value.replace(/[０-９]/g, (char) => String.fromCharCode(char.charCodeAt(0) - 0xfee0))
+}
+
+function extractReferenceImageNames(value: string) {
+  const names = new Set<string>()
+  const matcher = /@?图片\s*([0-9０-９]+)/g
+  let match = matcher.exec(value)
+  while (match) {
+    names.add(`图片${normalizeReferenceImageIndex(match[1])}`)
+    match = matcher.exec(value)
+  }
+  return names
+}
+
+function unknownPromptReferenceNames() {
+  const knownNames = new Set(
+    referenceImages.value.map((image) => normalizeReferenceImageName(image.reference_image_name)),
+  )
+  return [...promptReferenceNames.value].filter((name) => !knownNames.has(name))
+}
+
+function isReferenceImageMentioned(image: LocalReferenceImage) {
+  return promptReferenceNames.value.has(normalizeReferenceImageName(image.reference_image_name))
+}
+
+function isReferenceImageActive(image: LocalReferenceImage) {
+  return activeReferenceImages.value.some((item) => item.id === image.id)
+}
+
+function nextReferenceImageName() {
+  const usedIndexes = referenceImages.value
+    .map((image) => normalizeReferenceImageName(image.reference_image_name).match(/^图片(\d+)$/)?.[1])
+    .filter((value): value is string => Boolean(value))
+    .map((value) => Number(value))
+  const nextIndex = usedIndexes.length ? Math.max(...usedIndexes) + 1 : 1
+  return `@图片${nextIndex}`
 }
 
 async function fetchProject() {
@@ -119,8 +171,15 @@ async function handleGenerate() {
     ElMessage.warning('请先填写图片提示词')
     return
   }
-  if (mode.value === 'image' && referenceImageCount.value < 1) {
-    ElMessage.warning('图生图至少要上传一张参考图')
+  if (mode.value === 'image') {
+    const unknownNames = unknownPromptReferenceNames()
+    if (unknownNames.length) {
+      ElMessage.warning(`提示词引用了 ${unknownNames.map((name) => `@${name}`).join('、')}，请先上传对应图片`)
+      return
+    }
+  }
+  if (mode.value === 'image' && activeReferenceImageCount.value < 1) {
+    ElMessage.warning('图生图至少要选中或 @ 引用一张参考图')
     return
   }
 
@@ -133,12 +192,13 @@ async function handleGenerate() {
   const signal = imageGenerationAbortController.signal
   try {
     const startedAt = Date.now()
+    const referencesForGeneration = activeReferenceImages.value.map(toReferencePayload)
     result.value =
       mode.value === 'image'
         ? await editImage(
             projectId(),
             cleanPrompt,
-            referenceImages.value.map(toReferencePayload),
+            referencesForGeneration,
             size.value,
             quality.value,
             signal,
@@ -182,13 +242,16 @@ async function handleReferenceImageChange(event: Event, referenceType: ImageRefe
         continue
       }
       const dataUrl = await readFileAsDataUrl(file)
+      const referenceImageName = nextReferenceImageName()
       referenceImages.value.push({
         id: `${referenceType}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
         reference_image_type: referenceType,
+        reference_image_name: referenceImageName,
         source_image_base64: dataUrl.split(',', 2)[1] || '',
         source_image_mime: file.type || 'image/png',
         source_image_filename: file.name || 'source.png',
         preview: dataUrl,
+        selected: true,
       })
     }
     mode.value = 'image'
@@ -213,6 +276,35 @@ function referenceImagesByType(referenceType: ImageReferenceType) {
   return referenceImages.value.filter((image) => image.reference_image_type === referenceType)
 }
 
+function activeReferenceImagesByType(referenceType: ImageReferenceType) {
+  return activeReferenceImages.value.filter((image) => image.reference_image_type === referenceType)
+}
+
+function setReferenceImageSelection(imageId: string, selected: boolean) {
+  const image = referenceImages.value.find((item) => item.id === imageId)
+  if (!image) return
+  image.selected = selected
+  syncReferencePromptBlock()
+}
+
+function toggleReferenceImageSelection(imageId: string) {
+  const image = referenceImages.value.find((item) => item.id === imageId)
+  if (!image) return
+  setReferenceImageSelection(imageId, !image.selected)
+}
+
+function handleReferenceSelectionChange(event: Event, imageId: string) {
+  setReferenceImageSelection(imageId, (event.target as HTMLInputElement).checked)
+}
+
+function appendReferenceMention(image: LocalReferenceImage) {
+  const basePrompt = stripReferencePromptBlock(prompt.value).trimEnd()
+  const spacer = basePrompt && !/[\s，。；,.!?！？]$/.test(basePrompt) ? ' ' : ''
+  prompt.value = `${basePrompt}${spacer}${image.reference_image_name}`.trimStart()
+  mode.value = 'image'
+  syncReferencePromptBlock()
+}
+
 function removeReferenceImage(imageId: string) {
   referenceImages.value = referenceImages.value.filter((image) => image.id !== imageId)
   syncReferencePromptBlock()
@@ -226,6 +318,7 @@ function clearReferenceImages(referenceType: ImageReferenceType) {
 function toReferencePayload(image: LocalReferenceImage): ImageReferencePayload {
   return {
     reference_image_type: image.reference_image_type,
+    reference_image_name: image.reference_image_name,
     source_image_base64: image.source_image_base64,
     source_image_mime: image.source_image_mime,
     source_image_filename: image.source_image_filename,
@@ -234,7 +327,7 @@ function toReferencePayload(image: LocalReferenceImage): ImageReferencePayload {
 
 function syncReferencePromptBlock() {
   const basePrompt = stripReferencePromptBlock(prompt.value).trim()
-  if (!referenceImages.value.length) {
+  if (!activeReferenceImages.value.length) {
     prompt.value = basePrompt
     return
   }
@@ -253,6 +346,9 @@ function stripReferencePromptBlock(value: string) {
 function buildReferencePromptBlock() {
   const lines = [
     referencePromptStart,
+    '本次选中或在提示词中 @ 引用的图片会发送给模型；未选中且未 @ 引用的图片不会参与生成。',
+    '如果提示词写 @图片1、@图片2、@图片3，必须分别绑定到下方同名参考图。',
+    '例：@图片1 和 @图片2 一起去 @图片3 吃饭 = 图片1/图片2 的人物或主体进入图片3场景中吃饭。',
     '术语定义：人设图只定义账号人物/出镜人物，包括脸、年龄感、发型、体型、气质和穿搭风格。',
     '术语定义：货品图只定义商品，包括形状、颜色、材质、纹理、比例、证书或关键细节。',
     '术语定义：场景图只定义拍摄环境，包括档口、公司、桌面、柜台、灯光、陈列方式和空间氛围。',
@@ -261,7 +357,7 @@ function buildReferencePromptBlock() {
     ...referencePromptImageLines(),
   ]
 
-  if (referenceImagesByType('persona').length) {
+  if (activeReferenceImagesByType('persona').length) {
     lines.push(
       `人设参考图：画面人物必须参考已上传的人设图；如果文案写“${project.value?.project_name || '账号人设'}”，不要凭名字另造人物。`,
     )
@@ -269,10 +365,10 @@ function buildReferencePromptBlock() {
     lines.push('未上传人设参考图：不要生成账号本人/昵称对应人物/正脸；如需人物，只允许非人设手部、背影或工作人员局部。')
   }
 
-  if (referenceImagesByType('product').length) {
+  if (activeReferenceImagesByType('product').length) {
     lines.push(`货品参考图：货品按上传图理解，重点保留 ${project.value?.product || '货品'} 的形状、颜色、材质、比例和关键细节。`)
   }
-  if (referenceImagesByType('location').length) {
+  if (activeReferenceImagesByType('location').length) {
     lines.push('场景参考图：环境按上传图理解，重点保留空间、桌面/档口/公司陈列关系和光线氛围。')
   }
 
@@ -294,9 +390,9 @@ function referencePromptImageLines() {
     location: 0,
   }
 
-  return referenceImages.value.map((image) => {
+  return activeReferenceImages.value.map((image) => {
     counts[image.reference_image_type] += 1
-    return `${referencePromptImageName(image.reference_image_type, counts[image.reference_image_type])}：${referenceTypeLabel(image.reference_image_type)}，文件名 ${image.source_image_filename}。`
+    return `${image.reference_image_name}：${referenceTypeLabel(image.reference_image_type)}，类型内序号 ${referencePromptImageName(image.reference_image_type, counts[image.reference_image_type])}，文件名 ${image.source_image_filename}。`
   })
 }
 
@@ -414,10 +510,39 @@ onBeforeUnmount(() => {
                     <div
                       v-for="image in referenceImagesByType(item.value)"
                       :key="image.id"
-                      class="reference-preview-item"
+                      :class="[
+                        'reference-preview-item',
+                        {
+                          'is-selected': image.selected,
+                          'is-mentioned': isReferenceImageMentioned(image),
+                          'is-active': isReferenceImageActive(image),
+                        },
+                      ]"
+                      @click="toggleReferenceImageSelection(image.id)"
                     >
                       <img :src="image.preview" :alt="image.source_image_filename" />
-                      <button type="button" @click="removeReferenceImage(image.id)">移除</button>
+                      <button
+                        type="button"
+                        class="reference-mention-button"
+                        @click.stop="appendReferenceMention(image)"
+                      >
+                        {{ image.reference_image_name }}
+                      </button>
+                      <label class="reference-check" @click.stop>
+                        <input
+                          type="checkbox"
+                          :checked="image.selected"
+                          @change="handleReferenceSelectionChange($event, image.id)"
+                        />
+                        <span>选中</span>
+                      </label>
+                      <button
+                        type="button"
+                        class="reference-remove-button"
+                        @click.stop="removeReferenceImage(image.id)"
+                      >
+                        移除
+                      </button>
                     </div>
                   </div>
 
@@ -437,8 +562,32 @@ onBeforeUnmount(() => {
                   </div>
                 </article>
               </div>
+              <div v-if="referenceImages.length" class="reference-selection-bar">
+                <div>
+                  <strong>本次使用 {{ activeReferenceImageCount }} / {{ referenceImages.length }} 张</strong>
+                  <span>选中图片会参与生成；提示词里出现 @图片 时也会自动纳入。</span>
+                </div>
+                <div class="reference-chip-row">
+                  <button
+                    v-for="image in referenceImages"
+                    :key="image.id"
+                    type="button"
+                    :class="[
+                      'reference-chip',
+                      {
+                        'is-selected': image.selected,
+                        'is-mentioned': isReferenceImageMentioned(image),
+                        'is-active': isReferenceImageActive(image),
+                      },
+                    ]"
+                    @click="appendReferenceMention(image)"
+                  >
+                    {{ image.reference_image_name }}
+                  </button>
+                </div>
+              </div>
               <p class="reference-rule-note">
-                图生图至少上传 1 张；没有人设参考图时，只生成货品和场景，不生成可识别人设本人。
+                图生图至少选中或 @ 引用 1 张；没有人设参考图时，只生成货品和场景，不生成可识别人设本人。
               </p>
             </el-form-item>
 
@@ -449,7 +598,7 @@ onBeforeUnmount(() => {
                 :rows="11"
                 maxlength="2000"
                 show-word-limit
-                placeholder="写清楚产品、场景、光线、质感、风格和不要出现的元素"
+                placeholder="例如：@图片1 和 @图片2 一起去 @图片3 吃饭。也可以写清楚产品、场景、光线、质感、风格和不要出现的元素"
               />
             </el-form-item>
 
@@ -790,6 +939,18 @@ onBeforeUnmount(() => {
   border-radius: 14px;
   background: rgba(0, 0, 0, 0.55);
   border: 1px solid var(--studio-border);
+  cursor: pointer;
+  transition:
+    border-color 0.2s ease,
+    box-shadow 0.2s ease,
+    transform 0.2s ease;
+}
+
+.reference-preview-item:hover,
+.reference-preview-item.is-active {
+  transform: translateY(-1px);
+  border-color: rgba(16, 185, 129, 0.52);
+  box-shadow: inset 0 0 0 1px rgba(16, 185, 129, 0.2);
 }
 
 .reference-preview-item img {
@@ -799,18 +960,101 @@ onBeforeUnmount(() => {
   object-fit: cover;
 }
 
-.reference-preview-item button {
+.reference-mention-button,
+.reference-remove-button,
+.reference-check {
   position: absolute;
-  right: 6px;
-  bottom: 6px;
   border: 0;
   border-radius: 999px;
-  padding: 3px 8px;
-  background: rgba(15, 23, 42, 0.72);
   color: #ffffff;
   font: inherit;
   font-size: 12px;
+  line-height: 1;
+}
+
+.reference-mention-button {
+  top: 6px;
+  left: 6px;
+  padding: 5px 8px;
+  background: rgba(16, 185, 129, 0.86);
   cursor: pointer;
+}
+
+.reference-remove-button {
+  right: 6px;
+  bottom: 6px;
+  padding: 5px 8px;
+  background: rgba(15, 23, 42, 0.72);
+  cursor: pointer;
+}
+
+.reference-check {
+  left: 6px;
+  bottom: 6px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 22px;
+  padding: 4px 7px;
+  background: rgba(15, 23, 42, 0.72);
+}
+
+.reference-check input {
+  width: 12px;
+  height: 12px;
+  accent-color: #10b981;
+}
+
+.reference-selection-bar {
+  display: grid;
+  gap: 10px;
+  width: 100%;
+  margin-top: 12px;
+  border: 1px solid rgba(16, 185, 129, 0.14);
+  border-radius: 18px;
+  padding: 12px;
+  background: rgba(16, 185, 129, 0.08);
+}
+
+.reference-selection-bar strong,
+.reference-selection-bar span {
+  display: block;
+}
+
+.reference-selection-bar strong {
+  color: var(--studio-ink);
+  font-size: 14px;
+  font-weight: 640;
+}
+
+.reference-selection-bar span {
+  margin-top: 4px;
+  color: var(--studio-muted);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.reference-chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.reference-chip {
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  border-radius: 999px;
+  padding: 6px 10px;
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--studio-soft-ink);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.reference-chip.is-active {
+  border-color: rgba(16, 185, 129, 0.42);
+  background: rgba(16, 185, 129, 0.16);
+  color: var(--studio-ink);
 }
 
 .source-upload-card.compact {

@@ -20,6 +20,7 @@ export interface ImageGenerateResponse {
 
 export interface ImageReferencePayload {
   reference_image_type: ImageReferenceType
+  reference_image_name?: string
   source_image_base64: string
   source_image_mime: string
   source_image_filename: string

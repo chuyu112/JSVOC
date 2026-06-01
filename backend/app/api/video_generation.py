@@ -431,6 +431,7 @@ def run_video_generation_task(
     reference_images: list[str] | None = None,
     reference_videos: list[str] | None = None,
     reference_audios: list[str] | None = None,
+    reference_image_names: list[str] | None = None,
 ) -> None:
     db = SessionLocal()
     try:
@@ -449,6 +450,7 @@ def run_video_generation_task(
             reference_images=reference_images,
             reference_videos=reference_videos,
             reference_audios=reference_audios,
+            reference_image_names=reference_image_names,
             on_provider_task_created=persist_provider_task,
             db=db,
         )
@@ -557,6 +559,7 @@ class VideoGenerateRequest(BaseModel):
     reference_media: str | None = Field(default=None, max_length=50_000_000)
     reference_medias: list[str] = Field(default_factory=list)
     reference_images: list[str] = Field(default_factory=list)
+    reference_image_names: list[str] = Field(default_factory=list)
     reference_videos: list[str] = Field(default_factory=list)
     reference_audios: list[str] = Field(default_factory=list)
 
@@ -652,6 +655,7 @@ def generate_video_async_api(
         payload.reference_images,
         payload.reference_videos,
         payload.reference_audios,
+        payload.reference_image_names,
     )
     data = GenerationTaskSubmitResponse(
         task_id=task.id,

@@ -157,6 +157,8 @@ def build_image_edit_prompt(payload: ImageEditRequest) -> str:
     type_label = "、".join(reference_type_label(item) for item in reference_types)
     rules = [
         f"参考图类型：{type_label}。",
+        "如果用户提示词中出现 @图片1、@图片2 等引用，必须严格按下面的参考图名称绑定到对应文件。",
+        "例如“@图片1 和 @图片2 一起去 @图片3 吃饭”表示让 @图片1、@图片2 的人物或主体进入 @图片3 的场景中吃饭。",
         "术语定义：人设图只定义账号人物/出镜人物，包括脸、年龄感、发型、体型、气质和穿搭风格。",
         "术语定义：货品图只定义商品，包括形状、颜色、材质、纹理、比例、证书或关键细节。",
         "术语定义：场景图只定义拍摄环境，包括档口、公司、桌面、柜台、灯光、陈列方式和空间氛围。",
@@ -250,7 +252,8 @@ def reference_image_order_rules(references: list[ImageReferenceInput]) -> list[s
     for image in references:
         counts[image.reference_image_type] += 1
         label = reference_type_label(image.reference_image_type)
-        image_name = reference_image_name(image.reference_image_type, counts[image.reference_image_type])
+        fallback_name = reference_image_name(image.reference_image_type, counts[image.reference_image_type])
+        image_name = reference_image_display_name(image, fallback_name)
         filename = image.source_image_filename or image_name
         rules.append(f"{image_name}：{label}，文件名 {filename}。")
     return rules
@@ -282,6 +285,13 @@ def reference_image_name(reference_type: str, index: int) -> str:
         "location": "场景图",
     }
     return f"{labels.get(reference_type, '参考图')}{index}"
+
+
+def reference_image_display_name(image: ImageReferenceInput, fallback_name: str) -> str:
+    raw_name = (image.reference_image_name or "").strip()
+    if not raw_name:
+        return fallback_name
+    return raw_name if raw_name.startswith("@") else f"@{raw_name}"
 
 
 def image_references_for_payload(payload: ImageEditRequest) -> list[ImageReferenceInput]:
