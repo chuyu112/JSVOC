@@ -1,0 +1,25 @@
+# frp 客户端配置 (运行在你的本地 Windows 电脑)
+serverAddr = "8.152.2.222"
+serverPort = 7000
+
+# 必须与 frps.toml 中的 token 一致
+auth.method = "token"
+auth.token = "jsvoc-frp-token-2026"
+
+# 给这个连接起个名字
+user = "local-pc"
+
+[[proxies]]
+name = "jsvoc-backend"
+type = "tcp"
+localIP = "127.0.0.1"
+localPort = 8000
+remotePort = 8000
+
+# 如果服务器有域名，也可以用 HTTP 方式
+# [[proxies]]
+# name = "jsvoc-backend-http"
+# type = "http"
+# localIP = "127.0.0.1"
+# localPort = 8000
+# customDomains = ["api.jadejinyuxuan.com"]

@@ -5,6 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.api import hot_copy
 from app.api.ai_chat import router as ai_chat_router
+from app.api.digital_human import router as digital_human_router
 from app.api.auth import router as auth_router
 from app.api.credits import router as credits_router
 from app.api.digital_assets import router as digital_assets_router
@@ -70,6 +71,7 @@ app.include_router(generation_records_router)
 app.include_router(generation_tasks_router)
 app.include_router(hot_copy.router)
 app.include_router(hot_videos_router)
+app.include_router(digital_human_router)
 
 
 @app.get("/health")
