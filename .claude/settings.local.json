@@ -23,7 +23,9 @@
       "WebSearch",
       "Bash(pip install *)",
       "Bash(yt-dlp --version)",
-      "Bash(yt-dlp -o \"test_video.%\\(ext\\)s\" --no-check-certificates \"https://v.douyin.com/2xmhkbJxZdk/\")"
+      "Bash(yt-dlp -o \"test_video.%\\(ext\\)s\" --no-check-certificates \"https://v.douyin.com/2xmhkbJxZdk/\")",
+      "Bash(yt-dlp --cookies-from-browser chrome --no-check-certificates \"https://v.douyin.com/2xmhkbJxZdk/\" -o \"test_video.%\\(ext\\)s\")",
+      "Bash(playwright install *)"
     ]
   }
 }

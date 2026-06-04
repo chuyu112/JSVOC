@@ -75,6 +75,9 @@ class Settings(BaseSettings):
     cozy_voice_url: str = Field(default="http://127.0.0.1:50000", alias="COZY_VOICE_URL")
     hey_gem_url: str = Field(default="http://127.0.0.1:3000", alias="HEY_GEM_URL")
 
+    # Douyin video parser (local Douyin_TikTok_Download_API)
+    douyin_api_url: str = Field(default="http://127.0.0.1:9000", alias="DOUYIN_API_URL")
+
     model_config = SettingsConfigDict(
         env_file=("../.env.example", "../.env", ".env"),
         env_file_encoding="utf-8",
