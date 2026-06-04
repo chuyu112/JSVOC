@@ -76,7 +76,7 @@ class Settings(BaseSettings):
     hey_gem_url: str = Field(default="http://127.0.0.1:3000", alias="HEY_GEM_URL")
 
     # Douyin video parser (local Douyin_TikTok_Download_API)
-    douyin_api_url: str = Field(default="http://127.0.0.1:9000", alias="DOUYIN_API_URL")
+    douyin_api_url: str = Field(default="http://127.0.0.1:80", alias="DOUYIN_API_URL")
 
     model_config = SettingsConfigDict(
         env_file=("../.env.example", "../.env", ".env"),
