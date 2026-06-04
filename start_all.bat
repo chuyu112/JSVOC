@@ -8,6 +8,7 @@ set FRP_DIR=C:\frp
 set FRP_CONFIG=%CD%\deploy\frpc.toml
 set COZYVOICE_DIR=C:\CozyVoice
 set HEYGEM_DIR=C:\HeyGem.ai
+set SOCIAL_UPLOAD_DIR=C:\social-auto-upload
 
 echo.
 echo ================================================
@@ -68,7 +69,15 @@ if exist "%HEYGEM_DIR%\docker-compose.yml" (
     echo [跳过] 未安装: %HEYGEM_DIR%
 )
 
-REM --- 5. GPU 状态 ---
+REM --- 5. Social Auto Upload ---
+echo [5/7] Social Auto Upload...
+if exist "%SOCIAL_UPLOAD_DIR%\social_auto_upload" (
+    echo [OK] 已安装
+) else (
+    echo [跳过] 未安装: %SOCIAL_UPLOAD_DIR%
+)
+
+REM --- 6. GPU 状态 ---
 echo [5/7] GPU...
 nvidia-smi --query-gpu=name,memory.total,memory.free --format=csv,noheader 2>nul || echo [跳过] 无 NVIDIA GPU
 echo [OK]
@@ -84,12 +93,13 @@ echo [7/7] FastAPI...
 echo.
 echo ================================================
 echo   服务状态:
-echo     FastAPI    http://127.0.0.1:8000
-echo     frpc       8.152.2.222:8000
-echo     CozyVoice  http://127.0.0.1:50000
-echo     HeyGem     http://127.0.0.1:3000
-echo     Whisper    内置 (RTX 5070 Ti)
-echo     FFmpeg     内置
+echo     FastAPI       http://127.0.0.1:8000
+echo     frpc          8.152.2.222:8000
+echo     CozyVoice     http://127.0.0.1:50000
+echo     HeyGem        http://127.0.0.1:3000
+echo     Whisper       内置 (RTX 5070 Ti)
+echo     FFmpeg        内置
+echo     SocialUpload  库调用 (无需常驻)
 echo   按 Ctrl+C 停止
 echo ================================================
 echo.

@@ -8,6 +8,7 @@ from app.services import generation_task_service
 from app.services import hey_gem_service
 from app.services import image_generation_service
 from app.services import project_service
+from app.services import social_publish_service
 from app.services import storage_service
 from app.services import video_compose_service
 from app.services import video_generation_service
@@ -23,6 +24,7 @@ __all__ = [
     "hey_gem_service",
     "image_generation_service",
     "project_service",
+    "social_publish_service",
     "storage_service",
     "video_compose_service",
     "video_generation_service",

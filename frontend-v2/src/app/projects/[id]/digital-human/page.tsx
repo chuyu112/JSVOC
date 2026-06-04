@@ -323,15 +323,24 @@ export default function ProjectDigitalHumanPage() {
           </div>
 
           {result ? (
-            <div className="text-center py-4">
-              <div className="text-[#5a9b82] font-bold mb-2">✅ 任务已提交</div>
+            <div className="text-center py-4 space-y-3">
+              <div className="text-[#5a9b82] font-bold">✅ 任务已提交</div>
               <div className="text-sm text-[#9ca3af]">
                 任务 ID: {result.task_id} | 视频 ID: {result.video_id}
               </div>
-              <p className="text-xs text-[#7a8a82] mt-2">
-                生成需要几分钟，请前往
-                <Link href="/history" className="text-[#5a9b82] mx-1">生成记录</Link>
-                查看进度
+              <div className="flex gap-3 justify-center">
+                <Link
+                  href={`/projects/${projectId}/publish?videoId=${result.video_id}`}
+                  className="btn btn-primary"
+                >
+                  🚀 一键分发到多平台
+                </Link>
+                <Link href="/history" className="btn btn-outline">
+                  查看生成记录
+                </Link>
+              </div>
+              <p className="text-xs text-[#7a8a82]">
+                支持：抖音、视频号、B站、小红书、快手
               </p>
             </div>
           ) : (
