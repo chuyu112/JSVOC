@@ -20,7 +20,10 @@
       "Bash(python3 darkmode.py)",
       "Bash(git fetch *)",
       "WebFetch(domain:github.com)",
-      "WebSearch"
+      "WebSearch",
+      "Bash(pip install *)",
+      "Bash(yt-dlp --version)",
+      "Bash(yt-dlp -o \"test_video.%\\(ext\\)s\" --no-check-certificates \"https://v.douyin.com/2xmhkbJxZdk/\")"
     ]
   }
 }

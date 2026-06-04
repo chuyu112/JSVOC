@@ -9,6 +9,7 @@ import { listGenerationTasks, type GenerationTaskSummary } from "@/lib/api/gener
 // ThemeSwitcher moved to /settings page
 
 const globalNavItems = [
+  { label: "视频转文字", mobileLabel: "转写", to: "/asr" },
   { label: "AI爆款仿写", mobileLabel: "仿写", to: "/hot-copy" },
   { label: "AI生图", mobileLabel: "生图", to: "/images" },
   { label: "AI生视频", mobileLabel: "视频", to: "/videos" },
