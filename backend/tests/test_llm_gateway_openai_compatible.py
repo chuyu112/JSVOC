@@ -546,6 +546,44 @@ class OpenAICompatibleGatewayTest(unittest.TestCase):
         self.assertNotIn("thinking", calls[0]["json"])
         self.assertNotIn("reasoning_effort", calls[0]["json"])
 
+    def test_kakayiduo_provider_uses_fixed_https_chat_endpoint_and_supported_models(self) -> None:
+        calls = []
+
+        def fake_post(url, headers, json, timeout):
+            calls.append({"url": url, "headers": headers, "json": json, "timeout": timeout})
+            return httpx.Response(
+                200,
+                json={
+                    "model": json["model"],
+                    "choices": [{"message": {"content": '{"answer": "ok"}'}}],
+                    "usage": {"prompt_tokens": 1, "completion_tokens": 1, "total_tokens": 2},
+                },
+                request=httpx.Request("POST", url),
+            )
+
+        settings = Settings(
+            LLM_PROVIDER="kakayiduo",
+            LLM_BASE_URL="http://api.kakayiduo.cloud:8080/v1",
+            LLM_API_KEY="test-key",
+            LLM_MODEL="gpt-5.4-mini",
+            ACCOUNT_PACKAGE_MODEL="deepseek-v4-flash",
+            EXECUTION_PLAN_MODEL="deepseek-v4-flash",
+            LLM_TIMEOUT_SECONDS=5,
+        )
+
+        with patch("app.llm.llm_gateway._post_json", side_effect=fake_post):
+            result = LLMGateway(settings=settings).generate(
+                db=self.db,
+                request=LLMGatewayRequest(module_name="account_package", user_prompt="generate"),
+            )
+
+        self.assertTrue(result.success)
+        self.assertEqual(result.provider, "kakayiduo")
+        self.assertEqual(result.model, "gpt5.4-mini")
+        self.assertEqual(calls[0]["url"], "https://api.kakayiduo.cloud/v1/chat/completions")
+        self.assertEqual(calls[0]["headers"]["Authorization"], "Bearer test-key")
+        self.assertEqual(calls[0]["json"]["model"], "gpt5.4-mini")
+
     def test_openai_compatible_allows_deepseek_account_package_model_override(self) -> None:
         calls = []
 

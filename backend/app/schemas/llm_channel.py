@@ -6,8 +6,7 @@ from pydantic import BaseModel, Field, field_validator
 SUPPORTED_LLM_CHANNEL_PROVIDERS = {
     "mock",
     "openai_compatible",
-    "kakayiduo_chat",
-    "kakayiduo_image",
+    "kakayiduo",
     "dataeye",
     "moyu",
     "moyu_image",
@@ -21,6 +20,15 @@ SUPPORTED_LLM_CHANNEL_PURPOSES = {"chat", "image", "video"}
 
 def normalize_provider(value: str) -> str:
     normalized = value.strip().lower().replace("-", "_")
+    if normalized in {
+        "kakayiduo_chat",
+        "kakayiduo_image",
+        "kakayioduo",
+        "kakayioduo_image",
+        "kakayuiduo",
+        "kakayuiduo_image",
+    }:
+        normalized = "kakayiduo"
     if normalized == "gpt_api":
         normalized = "openai_compatible"
     if normalized == "moyu_pic":

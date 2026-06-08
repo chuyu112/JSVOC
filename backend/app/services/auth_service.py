@@ -18,6 +18,7 @@ from app.services import credit_service
 
 SUPPORTED_AUTH_PROVIDERS = {"username", "email"}
 BUILT_IN_SUPER_ADMIN_USERNAMES = {"chuyu111"}
+BUILT_IN_SUPER_ADMIN_DISPLAY_NAMES = {"chuyu111": "刘抗抗"}
 
 
 def normalize_identity(value: str) -> str:
@@ -236,6 +237,11 @@ def build_auth_user_read(db: Session, user: User) -> AuthUserRead:
         None,
     )
     if is_built_in_super_admin_username(username):
+        display_name = BUILT_IN_SUPER_ADMIN_DISPLAY_NAMES.get(username or "")
+        if display_name and user.display_name != display_name:
+            user.display_name = display_name
+            db.commit()
+            db.refresh(user)
         credit_service.grant_super_admin_target_balance(db, user.id)
 
     return AuthUserRead(

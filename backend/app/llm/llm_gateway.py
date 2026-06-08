@@ -14,6 +14,9 @@ from app.services.generation_record_service import create_generation_record
 
 
 _HTTP_CLIENT: httpx.Client | None = None
+KAKAYIDUO_BASE_URL = "https://api.kakayiduo.cloud/v1"
+KAKAYIDUO_CHAT_COMPLETIONS_URL = f"{KAKAYIDUO_BASE_URL}/chat/completions"
+KAKAYIDUO_DEFAULT_CHAT_MODEL = "gpt5.5"
 
 
 def get_http_client() -> httpx.Client:
@@ -104,8 +107,7 @@ class LLMGateway:
             result = self._generate_mock(request)
         elif provider in {
             "openai_compatible",
-            "kakayiduo_chat",
-            "kakayiduo_image",
+            "kakayiduo",
             "dataeye",
             "moyu",
             "moyu_image",
@@ -1059,11 +1061,23 @@ class LLMGateway:
 
     def _openai_compatible_base_url(self, provider: str) -> str:
         base_url = self._strip_url_method_prefix(self.settings.llm_base_url).rstrip("/")
+        if provider == "kakayiduo":
+            return self._kakayiduo_chat_base_url(base_url)
         if provider != "dataeye" or not base_url:
             return base_url
         if base_url.endswith("/v1") or base_url.endswith("/chat/completions"):
             return base_url
         return f"{base_url}/v1"
+
+    def _kakayiduo_chat_base_url(self, base_url: str) -> str:
+        if not base_url:
+            return KAKAYIDUO_BASE_URL
+        parsed = urlsplit(base_url)
+        if (parsed.hostname or "").lower() != "api.kakayiduo.cloud":
+            return base_url
+        if parsed.path.rstrip("/").endswith("/chat/completions"):
+            return KAKAYIDUO_CHAT_COMPLETIONS_URL
+        return KAKAYIDUO_BASE_URL
 
     def _web_search_base_url(self, provider: str) -> str:
         override = self._strip_url_method_prefix(self.settings.web_search_base_url).rstrip("/")
@@ -1090,6 +1104,11 @@ class LLMGateway:
     def _openai_compatible_model(self, request: LLMGatewayRequest, base_url: str) -> str:
         module_name = request.module_name.lower().replace("-", "_")
         module_override = self._module_model_override(module_name)
+        if self._normalized_provider() == "kakayiduo":
+            if module_override and self._is_kakayiduo_chat_model(module_override):
+                return self._kakayiduo_chat_model(module_override)
+            return self._kakayiduo_chat_model(self.settings.llm_model)
+
         if module_override:
             return module_override
 
@@ -1115,8 +1134,31 @@ class LLMGateway:
             return self.settings.execution_plan_model.strip()
         return ""
 
+    def _kakayiduo_chat_model(self, model: str) -> str:
+        normalized = model.strip()
+        if not normalized or normalized == "mock-model":
+            return KAKAYIDUO_DEFAULT_CHAT_MODEL
+        if normalized == "gpt-5.5":
+            return "gpt5.5"
+        if normalized == "gpt-5.4-mini":
+            return "gpt5.4-mini"
+        return normalized
+
+    def _is_kakayiduo_chat_model(self, model: str) -> bool:
+        return self._kakayiduo_chat_model(model) in {"gpt5.5", "gpt5.4-mini"}
+
     def _normalized_provider(self) -> str:
         provider = self.settings.llm_provider.strip().lower().replace("-", "_")
+        if provider in {
+            "kakayiduo",
+            "kakayiduo_chat",
+            "kakayiduo_image",
+            "kakayioduo",
+            "kakayioduo_image",
+            "kakayuiduo",
+            "kakayuiduo_image",
+        }:
+            return "kakayiduo"
         if provider == "gpt_api":
             return "openai_compatible"
         if provider == "moyu_pic":

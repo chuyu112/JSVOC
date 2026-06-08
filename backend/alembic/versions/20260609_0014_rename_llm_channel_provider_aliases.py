@@ -17,8 +17,13 @@ depends_on = None
 def upgrade() -> None:
     op.execute("UPDATE llm_channels SET provider = 'moyu_image' WHERE provider IN ('moyu-pic', 'moyu_pic')")
     op.execute("UPDATE llm_channels SET provider = 'seedance_video' WHERE provider IN ('ark-video', 'ark_video')")
+    op.execute(
+        "UPDATE llm_channels SET provider = 'kakayiduo' "
+        "WHERE provider IN ('kakayiduo-chat', 'kakayiduo_chat', 'kakayiduo-image', 'kakayiduo_image')"
+    )
 
 
 def downgrade() -> None:
     op.execute("UPDATE llm_channels SET provider = 'moyu_pic' WHERE provider = 'moyu_image'")
     op.execute("UPDATE llm_channels SET provider = 'ark_video' WHERE provider = 'seedance_video'")
+    op.execute("UPDATE llm_channels SET provider = 'kakayiduo_chat' WHERE provider = 'kakayiduo'")

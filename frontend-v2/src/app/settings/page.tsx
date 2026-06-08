@@ -25,9 +25,27 @@ const themes = [
   { key: "black", label: "墨翠", dot: "#b8a060", desc: "黑金相映，低调奢华" },
 ];
 
-const providerOptions = [
-  { value: "kakayiduo_chat", label: "kakayiduo-chat", purposes: ["chat"], defaultBaseUrl: "http://api.kakayiduo.cloud/v1", defaultModel: "gpt-5.5" },
-  { value: "kakayiduo_image", label: "kakayiduo-image", purposes: ["image"], defaultBaseUrl: "http://api.kakayiduo.cloud/v1", defaultModel: "gpt-image-2" },
+type ProviderOption = {
+  value: string;
+  label: string;
+  purposes: string[];
+  defaultBaseUrl?: string;
+  defaultModel?: string;
+  defaultModelByPurpose?: Record<string, string>;
+  modelOptionsByPurpose?: Record<string, string[]>;
+};
+
+const kakayiduoChatModels = ["gpt5.5", "gpt5.4-mini"];
+
+const providerOptions: ProviderOption[] = [
+  {
+    value: "kakayiduo",
+    label: "kakayiduo",
+    purposes: ["chat", "image"],
+    defaultBaseUrl: "https://api.kakayiduo.cloud/v1",
+    defaultModelByPurpose: { chat: "gpt5.5", image: "gpt-image-2" },
+    modelOptionsByPurpose: { chat: kakayiduoChatModels },
+  },
   { value: "moyu_image", label: "moyu-image", purposes: ["image"], defaultModel: "gpt-image-2" },
   { value: "seedance_video", label: "seedance-video", purposes: ["video"], defaultModel: "seedance-2.0" },
   { value: "mock", label: "Mock", purposes: ["chat"] },
@@ -47,10 +65,10 @@ const channelPurposes = [
 const emptyChannelForm: LLMChannelPayload = {
   name: "",
   purpose: "chat",
-  provider: "kakayiduo_chat",
-  base_url: "http://api.kakayiduo.cloud/v1",
+  provider: "kakayiduo",
+  base_url: "https://api.kakayiduo.cloud/v1",
   api_key: "",
-  model: "gpt-5.5",
+  model: "gpt5.5",
   is_active: false,
 };
 
@@ -142,7 +160,7 @@ export default function SettingsPage() {
       provider: normalizeProviderValue(channel.provider),
       base_url: channel.base_url,
       api_key: "",
-      model: channel.model,
+      model: normalizeChannelModel(channel.provider, channel.purpose, channel.model),
       is_active: channel.is_active,
     });
     setChannelError("");
@@ -155,7 +173,7 @@ export default function SettingsPage() {
       purpose,
       provider: next.value,
       base_url: next.defaultBaseUrl || "",
-      model: next.defaultModel || "",
+      model: defaultModelForOption(next, purpose),
     });
   }
 
@@ -164,7 +182,29 @@ export default function SettingsPage() {
   }
 
   function normalizeProviderValue(value: string) {
-    return value.trim().toLowerCase().replaceAll("-", "_");
+    const normalized = value.trim().toLowerCase().replaceAll("-", "_");
+    if (
+      [
+        "kakayiduo_chat",
+        "kakayiduo_image",
+        "kakayioduo",
+        "kakayioduo_image",
+        "kakayuiduo",
+        "kakayuiduo_image",
+      ].includes(normalized)
+    ) {
+      return "kakayiduo";
+    }
+    return normalized;
+  }
+
+  function normalizeChannelModel(provider: string, purpose: string, model: string) {
+    const normalizedProvider = normalizeProviderValue(provider);
+    if (normalizedProvider === "kakayiduo" && purpose === "chat") {
+      if (model === "gpt-5.5") return "gpt5.5";
+      if (model === "gpt-5.4-mini") return "gpt5.4-mini";
+    }
+    return model;
   }
 
   function providerOptionsForPurpose(purpose: string) {
@@ -180,6 +220,15 @@ export default function SettingsPage() {
     return providerOptions.find((item) => item.value === normalized)?.label || value;
   }
 
+  function defaultModelForOption(option: ProviderOption, purpose: string) {
+    return option.defaultModelByPurpose?.[purpose] || option.defaultModel || "";
+  }
+
+  function modelOptionsForChannel() {
+    const option = providerOptions.find((item) => item.value === normalizeProviderValue(channelForm.provider));
+    return option?.modelOptionsByPurpose?.[channelForm.purpose] || [];
+  }
+
   function changeChannelProvider(provider: string) {
     const normalized = normalizeProviderValue(provider);
     const option = providerOptions.find((item) => item.value === normalized);
@@ -187,7 +236,7 @@ export default function SettingsPage() {
       ...channelForm,
       provider: normalized,
       base_url: option?.defaultBaseUrl || channelForm.base_url,
-      model: option?.defaultModel || channelForm.model,
+      model: option ? defaultModelForOption(option, channelForm.purpose) : channelForm.model,
     });
   }
 
@@ -500,12 +549,29 @@ export default function SettingsPage() {
 
                 <label className="block">
                   <span className="block text-[12px] text-[#9ca3af] mb-1">模型名</span>
-                  <input
-                    value={channelForm.model}
-                    onChange={(event) => setChannelForm({ ...channelForm, model: event.target.value })}
-                    className="w-full rounded-[0.5rem] border border-[rgba(255,255,255,0.08)] bg-[rgba(0,0,0,0.22)] px-3 py-2 text-sm text-[#f5f5f5] outline-none focus:border-[var(--jade-primary)]"
-                    placeholder="deepseek-v4-flash"
-                  />
+                  {modelOptionsForChannel().length > 0 ? (
+                    <select
+                      value={channelForm.model}
+                      onChange={(event) => setChannelForm({ ...channelForm, model: event.target.value })}
+                      className="w-full rounded-[0.5rem] border border-[rgba(255,255,255,0.08)] bg-[#101613] px-3 py-2 text-sm text-[#f5f5f5] outline-none focus:border-[var(--jade-primary)]"
+                    >
+                      {modelOptionsForChannel().map((model) => (
+                        <option key={model} value={model}>
+                          {model}
+                        </option>
+                      ))}
+                      {!modelOptionsForChannel().includes(channelForm.model) && channelForm.model && (
+                        <option value={channelForm.model}>{channelForm.model}</option>
+                      )}
+                    </select>
+                  ) : (
+                    <input
+                      value={channelForm.model}
+                      onChange={(event) => setChannelForm({ ...channelForm, model: event.target.value })}
+                      className="w-full rounded-[0.5rem] border border-[rgba(255,255,255,0.08)] bg-[rgba(0,0,0,0.22)] px-3 py-2 text-sm text-[#f5f5f5] outline-none focus:border-[var(--jade-primary)]"
+                      placeholder="deepseek-v4-flash"
+                    />
+                  )}
                 </label>
 
                 <label className="flex items-center gap-2 text-[13px] text-[#d0ddd6]">

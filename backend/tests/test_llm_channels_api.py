@@ -235,13 +235,13 @@ class LLMChannelsApiTest(unittest.TestCase):
                 "provider": "kakayiduo-chat",
                 "base_url": "http://api.kakayiduo.cloud/v1",
                 "api_key": "kakayiduo-secret",
-                "model": "gpt-5.5",
+                "model": "gpt5.5",
                 "is_active": True,
             },
         )
         self.assertEqual(create_response.status_code, 201)
         created = create_response.json()["data"]
-        self.assertEqual(created["provider"], "kakayiduo_chat")
+        self.assertEqual(created["provider"], "kakayiduo")
         channel_id = created["id"]
 
         fake_response = Mock()
@@ -258,8 +258,9 @@ class LLMChannelsApiTest(unittest.TestCase):
         self.assertEqual(test_response.status_code, 200)
         payload = test_response.json()["data"]
         self.assertTrue(payload["success"])
-        self.assertEqual(payload["provider"], "kakayiduo_chat")
-        self.assertEqual(post_json.call_args.args[0], "http://api.kakayiduo.cloud/v1/chat/completions")
+        self.assertEqual(payload["provider"], "kakayiduo")
+        self.assertEqual(post_json.call_args.args[0], "https://api.kakayiduo.cloud/v1/chat/completions")
+        self.assertEqual(post_json.call_args.kwargs["json"]["model"], "gpt5.5")
 
     def test_legacy_provider_names_are_renamed(self) -> None:
         self.register("chuyu111")
@@ -293,6 +294,21 @@ class LLMChannelsApiTest(unittest.TestCase):
         )
         self.assertEqual(video_response.status_code, 201)
         self.assertEqual(video_response.json()["data"]["provider"], "seedance_video")
+
+        kakayiduo_response = self.client.post(
+            "/api/admin/llm-channels",
+            json={
+                "name": "Kakayiduo Image",
+                "purpose": "image",
+                "provider": "kakayiduo-image",
+                "base_url": "https://api.kakayiduo.cloud/v1",
+                "api_key": "image-secret",
+                "model": "gpt-image-2",
+                "is_active": True,
+            },
+        )
+        self.assertEqual(kakayiduo_response.status_code, 201)
+        self.assertEqual(kakayiduo_response.json()["data"]["provider"], "kakayiduo")
 
     def test_image_channel_test_uses_image_generation_endpoint(self) -> None:
         self.register("chuyu111")
@@ -343,7 +359,7 @@ class LLMChannelsApiTest(unittest.TestCase):
             json={
                 "name": "kakayiduo-image",
                 "purpose": "image",
-                "provider": "kakayiduo-image",
+                "provider": "kakayiduo",
                 "base_url": "http://api.kakayiduo.cloud/v1",
                 "api_key": "image-secret",
                 "model": "gpt-image-2",
@@ -352,7 +368,7 @@ class LLMChannelsApiTest(unittest.TestCase):
         )
         self.assertEqual(create_response.status_code, 201)
         created = create_response.json()["data"]
-        self.assertEqual(created["provider"], "kakayiduo_image")
+        self.assertEqual(created["provider"], "kakayiduo")
         channel_id = created["id"]
 
         fake_response = Mock()
@@ -370,8 +386,8 @@ class LLMChannelsApiTest(unittest.TestCase):
         self.assertEqual(test_response.status_code, 200)
         payload = test_response.json()["data"]
         self.assertTrue(payload["success"])
-        self.assertEqual(payload["provider"], "kakayiduo_image")
-        self.assertEqual(post_image.call_args.args[0], "http://api.kakayiduo.cloud/v1/images/generations")
+        self.assertEqual(payload["provider"], "kakayiduo")
+        self.assertEqual(post_image.call_args.args[0], "https://api.kakayiduo.cloud/v1/images/generations")
 
     def test_video_channel_test_checks_config_without_submitting_task(self) -> None:
         self.register("chuyu111")

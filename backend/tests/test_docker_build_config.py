@@ -17,6 +17,15 @@ class DockerBuildConfigTest(unittest.TestCase):
         self.assertIn("--retries", dockerfile)
         self.assertIn("PIP_INDEX_URL:", compose)
 
+    def test_compose_includes_postgres_backup_sidecar(self) -> None:
+        compose = (REPO_ROOT / "docker-compose.yml").read_text(encoding="utf-8")
+
+        self.assertIn("postgres-backup:", compose)
+        self.assertIn("pg_dump -h postgres", compose)
+        self.assertIn("./backups/postgres:/backups", compose)
+        self.assertIn("POSTGRES_BACKUP_INTERVAL_SECONDS", compose)
+        self.assertIn("POSTGRES_BACKUP_RETENTION_DAYS", compose)
+
 
 if __name__ == "__main__":
     unittest.main()

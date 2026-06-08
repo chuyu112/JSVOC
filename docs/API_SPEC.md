@@ -48,7 +48,7 @@ account_package、execution_plan、context、generation_record_id、provider、m
 
 说明：
 
-该接口只发起一次 `LLMGateway` 调用，模块名为 `strategy_bundle`，当前使用 `openai_compatible` 渠道和 `gpt-5.5` 模型；账号包装和 30 天执行计划会同时返回。
+该接口只发起一次 `LLMGateway` 调用，模块名为 `strategy_bundle`，当前可使用 `kakayiduo` 渠道和 `gpt5.5` / `gpt5.4-mini` 模型；账号包装和 30 天执行计划会同时返回。
 
 ## 5. 选题生成
 
@@ -156,8 +156,7 @@ GET /api/ai-chat/conversations/{conversation_id}/history
 
 - `mock`
 - `openai_compatible`
-- `kakayiduo_chat`
-- `kakayiduo_image`
+- `kakayiduo`
 - `anthropic_compatible`
 - `moyu`
 - `moyu_image`
@@ -168,16 +167,20 @@ GET /api/ai-chat/conversations/{conversation_id}/history
 兼容别名：
 
 - `gpt-api`
+- `kakayiduo-chat`
+- `kakayiduo-image`
 - `moyu-pic`
 - `ark-video`
 
 说明：
 
 - `gpt-api` 不是独立渠道，后端会自动映射为 `openai_compatible`
+- `kakayiduo-chat`、`kakayiduo-image` 不是独立渠道，后端会自动映射为 `kakayiduo`
+- `moyu-pic` 已改名为 `moyu-image`，后端兼容旧名并规范化为 `moyu_image`
+- `ark-video` 已改名为 `seedance-video`，后端兼容旧名并规范化为 `seedance_video`
 - `mock` 仅用于测试流程，不走真实模型，也没有真实外部数据
-- `openai_compatible` 当前可接 `sub2api` 中转，`http://api.kakayiduo.cloud/v1` 属于这类
-- `http://api.kakayiduo.cloud/v1` 当前走的是 GPT，不是 DeepSeek 官方地址
-- 即使后续该中转改成绑定域名访问，也仍然归类为同一个 `openai_compatible` 中转渠道
+- `kakayiduo` 当前聊天端点为 `https://api.kakayiduo.cloud/v1/chat/completions`，文生图端点为 `https://api.kakayiduo.cloud/v1/images/generations`，图生图端点为 `https://api.kakayiduo.cloud/v1/images/edits`
+- `kakayiduo` chat 模型当前可选 `gpt5.5` 和 `gpt5.4-mini`
 - `anthropic_compatible` 当前用于自用 DeepSeek API，例如 `https://api.deepseek.com/anthropic`
 
 ## 9. 当前实际使用配置
@@ -185,9 +188,9 @@ GET /api/ai-chat/conversations/{conversation_id}/history
 当前账号包装测试配置如下：
 
 ```env
-LLM_PROVIDER=openai_compatible
-LLM_BASE_URL=http://api.kakayiduo.cloud/v1
-LLM_MODEL=gpt-5.5
+LLM_PROVIDER=kakayiduo
+LLM_BASE_URL=https://api.kakayiduo.cloud/v1
+LLM_MODEL=gpt5.5
 LLM_TIMEOUT_SECONDS=180
 ACCOUNT_PACKAGE_MODEL=
 EXECUTION_PLAN_MODEL=
@@ -201,7 +204,7 @@ EXECUTION_PLAN_MODEL=
 
 ## 10. 当前模块渠道约定
 
-当前以下模块统一走 `openai_compatible`：
+当前以下模块可统一走 `kakayiduo`：
 
 - 账号包装
 - 执行计划
@@ -210,8 +213,8 @@ EXECUTION_PLAN_MODEL=
 
 说明：
 
-- 账号包装、执行计划、文案生成通过 `LLMGateway` 走 `openai_compatible`
-- 出图也按 `openai_compatible` 处理，只是由 `LLM_BASE_URL` 派生图片接口地址
+- 账号包装、执行计划、文案生成通过 `LLMGateway` 走 `kakayiduo`
+- 出图通过图片生成服务走同一 provider，并路由到图片接口地址
 - 当前出图地址可理解为：
-  - `http://api.kakayiduo.cloud/v1/images/generations`
-  - `http://api.kakayiduo.cloud/v1/images/edits`
+  - `https://api.kakayiduo.cloud/v1/images/generations`
+  - `https://api.kakayiduo.cloud/v1/images/edits`

@@ -27,6 +27,9 @@ RETRYABLE_IMAGE_STATUS_CODES = {502, 503, 504}
 SUPPORTED_EDIT_IMAGE_MIMES = {"image/png", "image/jpeg", "image/jpg", "image/webp"}
 MAX_PROVIDER_MULTIPART_IMAGE_BYTES = 600_000
 MIN_PROVIDER_IMAGE_BYTES = 60_000
+KAKAYIDUO_IMAGE_BASE_URL = "https://api.kakayiduo.cloud/v1"
+KAKAYIDUO_IMAGE_GENERATIONS_URL = f"{KAKAYIDUO_IMAGE_BASE_URL}/images/generations"
+KAKAYIDUO_IMAGE_EDITS_URL = f"{KAKAYIDUO_IMAGE_BASE_URL}/images/edits"
 logger = logging.getLogger(__name__)
 
 
@@ -121,6 +124,8 @@ def edit_image(payload: ImageEditRequest, db: Session | None = None) -> ImageGen
 
 def image_generations_url(settings: Settings) -> str:
     base_url = strip_url_method_prefix(settings.llm_base_url).rstrip("/")
+    if image_provider(settings) == "kakayiduo":
+        return kakayiduo_image_generations_url(base_url)
     if not base_url:
         raise ValueError("LLM_BASE_URL is required for image generation")
     if base_url.endswith("/images/generations"):
@@ -134,6 +139,16 @@ def image_generations_url(settings: Settings) -> str:
 
 def image_provider(settings: Settings) -> str:
     provider = settings.llm_provider.strip().lower().replace("-", "_") or "unknown"
+    if provider in {
+        "kakayiduo",
+        "kakayiduo_chat",
+        "kakayiduo_image",
+        "kakayioduo",
+        "kakayioduo_image",
+        "kakayuiduo",
+        "kakayuiduo_image",
+    }:
+        return "kakayiduo"
     if provider == "moyu_pic":
         return "moyu_image"
     return provider
@@ -145,6 +160,8 @@ def image_model(settings: Settings) -> str:
 
 def image_edits_url(settings: Settings) -> str:
     base_url = strip_url_method_prefix(settings.llm_base_url).rstrip("/")
+    if image_provider(settings) == "kakayiduo":
+        return kakayiduo_image_edits_url(base_url)
     if not base_url:
         raise ValueError("LLM_BASE_URL is required for image editing")
     if base_url.endswith("/images/edits"):
@@ -156,6 +173,40 @@ def image_edits_url(settings: Settings) -> str:
     if base_url.endswith("/v1"):
         return f"{base_url}/images/edits"
     return f"{base_url}/v1/images/edits"
+
+
+def kakayiduo_image_generations_url(base_url: str) -> str:
+    if not base_url:
+        return KAKAYIDUO_IMAGE_GENERATIONS_URL
+    if base_url.rstrip("/").endswith("/images/generations"):
+        return KAKAYIDUO_IMAGE_GENERATIONS_URL if is_kakayiduo_url(base_url) else base_url
+    if is_kakayiduo_url(base_url):
+        return KAKAYIDUO_IMAGE_GENERATIONS_URL
+    if base_url.endswith("/chat/completions"):
+        return f"{base_url[: -len('/chat/completions')]}/images/generations"
+    if base_url.endswith("/v1"):
+        return f"{base_url}/images/generations"
+    return f"{base_url}/v1/images/generations"
+
+
+def kakayiduo_image_edits_url(base_url: str) -> str:
+    if not base_url:
+        return KAKAYIDUO_IMAGE_EDITS_URL
+    if base_url.rstrip("/").endswith("/images/edits"):
+        return KAKAYIDUO_IMAGE_EDITS_URL if is_kakayiduo_url(base_url) else base_url
+    if is_kakayiduo_url(base_url):
+        return KAKAYIDUO_IMAGE_EDITS_URL
+    if base_url.endswith("/images/generations"):
+        return f"{base_url[: -len('/images/generations')]}/images/edits"
+    if base_url.endswith("/chat/completions"):
+        return f"{base_url[: -len('/chat/completions')]}/images/edits"
+    if base_url.endswith("/v1"):
+        return f"{base_url}/images/edits"
+    return f"{base_url}/v1/images/edits"
+
+
+def is_kakayiduo_url(value: str) -> bool:
+    return "://api.kakayiduo.cloud" in value.lower()
 
 
 def build_image_edit_prompt(payload: ImageEditRequest) -> str:

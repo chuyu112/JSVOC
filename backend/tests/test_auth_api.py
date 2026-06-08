@@ -108,12 +108,14 @@ class AuthApiTest(unittest.TestCase):
         self.assertEqual(register_response.status_code, 201)
         user = register_response.json()["data"]["user"]
         self.assertTrue(user["is_admin"])
+        self.assertEqual(user["display_name"], "刘抗抗")
         self.assertEqual(user["credit_balance"], 1_000_000)
 
         me_response = self.client.get("/api/auth/me")
         self.assertEqual(me_response.status_code, 200)
         me_user = me_response.json()["data"]["user"]
         self.assertTrue(me_user["is_admin"])
+        self.assertEqual(me_user["display_name"], "刘抗抗")
         self.assertEqual(me_user["credit_balance"], 1_000_000)
 
     def test_register_accepts_chinese_username(self) -> None:

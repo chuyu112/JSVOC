@@ -25,6 +25,7 @@ frontend/dist-ssr/
 *.tar.gz
 .tmp-*
 tmp/
+backups/
 
 fill_docs.bat
 fix_project_docs.bat

@@ -21,7 +21,8 @@ def upgrade() -> None:
         sa.Column("purpose", sa.String(length=40), nullable=False, server_default="chat"),
     )
     op.create_index(op.f("ix_llm_channels_purpose"), "llm_channels", ["purpose"], unique=False)
-    op.alter_column("llm_channels", "purpose", server_default=None)
+    if op.get_bind().dialect.name != "sqlite":
+        op.alter_column("llm_channels", "purpose", server_default=None)
 
 
 def downgrade() -> None:

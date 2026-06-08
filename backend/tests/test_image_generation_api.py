@@ -127,6 +127,38 @@ class ImageGenerationApiTest(unittest.TestCase):
         )
         self.assertEqual(calls[0]["timeout"], 180.0)
 
+    def test_generate_image_routes_kakayiduo_provider_to_canonical_image_endpoint(self) -> None:
+        calls = []
+
+        def fake_post(url, headers, json, timeout):
+            calls.append({"url": url, "headers": headers, "json": json, "timeout": timeout})
+            return httpx.Response(
+                200,
+                json={"model": "gpt-image-2", "data": [{"b64_json": "a2FrYXlpZHVv"}]},
+                request=httpx.Request("POST", url),
+            )
+
+        settings = Settings(
+            LLM_PROVIDER="kakayiduo",
+            LLM_BASE_URL="http://api.kakayiduo.cloud:8080/v1",
+            LLM_API_KEY="test-key",
+            LLM_MODEL="gpt5.5",
+        )
+
+        with (
+            patch("app.services.image_generation_service.get_settings", return_value=settings),
+            patch("app.services.image_generation_service.httpx.post", side_effect=fake_post),
+        ):
+            response = self.client.post(
+                "/api/creation/images/generate",
+                json={"prompt": "A clean product photo of a jade bracelet"},
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["data"]["provider"], "kakayiduo")
+        self.assertEqual(calls[0]["url"], "https://api.kakayiduo.cloud/v1/images/generations")
+        self.assertEqual(calls[0]["headers"]["Authorization"], "Bearer test-key")
+
     def test_generate_image_rejects_unsupported_size(self) -> None:
         response = self.client.post(
             "/api/creation/images/generate",
@@ -273,6 +305,42 @@ class ImageGenerationApiTest(unittest.TestCase):
         self.assertEqual(calls[0]["data"]["quality"], "medium")
         self.assertEqual(calls[0]["files"][0], ("image", ("source.png", b"fake-image", "image/png")))
         self.assertEqual(calls[0]["timeout"], 180.0)
+
+    def test_edit_image_routes_kakayiduo_provider_to_canonical_edits_endpoint(self) -> None:
+        calls = []
+
+        def fake_post(url, headers, data, files, timeout):
+            calls.append({"url": url, "headers": headers, "data": data, "files": files, "timeout": timeout})
+            return httpx.Response(
+                200,
+                json={"model": "gpt-image-2", "data": [{"b64_json": "ZWRpdGVk"}]},
+                request=httpx.Request("POST", url),
+            )
+
+        settings = Settings(
+            LLM_PROVIDER="kakayiduo-image",
+            LLM_BASE_URL="https://api.kakayiduo.cloud/v1/images/generations",
+            LLM_API_KEY="test-key",
+            LLM_MODEL="gpt5.5",
+        )
+
+        with (
+            patch("app.services.image_generation_service.get_settings", return_value=settings),
+            patch("app.services.image_generation_service.httpx.post", side_effect=fake_post),
+        ):
+            response = self.client.post(
+                "/api/creation/images/edit",
+                json={
+                    "prompt": "Keep the jade bracelet, make the light softer",
+                    "source_image_base64": "ZmFrZS1pbWFnZQ==",
+                    "source_image_mime": "image/png",
+                    "source_image_filename": "source.png",
+                },
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["data"]["provider"], "kakayiduo")
+        self.assertEqual(calls[0]["url"], "https://api.kakayiduo.cloud/v1/images/edits")
 
     def test_edit_image_accepts_up_to_three_references_per_type(self) -> None:
         calls = []
