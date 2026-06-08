@@ -34,6 +34,7 @@ def generate_video(
 ) -> dict[str, Any]:
     settings = llm_channel_service.get_effective_video_settings(db, get_settings()) if db is not None else get_settings()
     started_at = time.perf_counter()
+    provider = video_provider(settings)
     base_url = video_base_url(settings)
     api_key = video_api_key(settings)
     if not api_key:
@@ -109,7 +110,7 @@ def generate_video(
     task_id = body.get("id")
     if not task_id:
         return {
-            "provider": "seedance",
+            "provider": provider,
             "model": model,
             "video_url": None,
             "task_id": None,
@@ -121,7 +122,7 @@ def generate_video(
     if on_provider_task_created is not None:
         on_provider_task_created(
             {
-                "provider": "seedance",
+                "provider": provider,
                 "model": model,
                 "task_id": task_id,
                 "status": "submitted",
@@ -132,7 +133,7 @@ def generate_video(
 
     result = poll_video_task(base_url, api_key, task_id, started_at, max_seconds=VIDEO_MAX_POLL_SECONDS)
     return {
-        "provider": "seedance",
+        "provider": provider,
         "model": model,
         "video_url": result.get("video_url"),
         "task_id": task_id,
@@ -298,6 +299,13 @@ def video_base_url(settings: Settings) -> str:
     if url.endswith("/v1"):
         return url[: -len("/v1")]
     return url
+
+
+def video_provider(settings: Settings) -> str:
+    provider = settings.llm_provider.strip().lower().replace("-", "_")
+    if provider in {"seedance_video", "ark_video"}:
+        return "seedance_video"
+    return "seedance"
 
 
 def video_api_key(settings: Settings) -> str:

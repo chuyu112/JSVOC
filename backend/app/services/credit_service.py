@@ -15,6 +15,7 @@ from app.services.video_model_catalog import video_model_pricing
 CREDIT_PER_YUAN = 100
 REGISTRATION_BONUS_CREDITS = 2000
 INVITE_BONUS_CREDITS = 2000
+SUPER_ADMIN_TARGET_CREDITS = 1_000_000
 PURCHASE_PACKAGES = [
     {"credits": 10000, "price_yuan": 100, "title": "10000 积分包"},
 ]
@@ -128,6 +129,36 @@ def grant_registration_bonus(db: Session, user_id: int, *, commit: bool = True) 
         reference_type="user",
         reference_id=user_id,
         metadata={"value_yuan": REGISTRATION_BONUS_CREDITS / CREDIT_PER_YUAN},
+        commit=commit,
+    )
+
+
+def grant_super_admin_target_balance(db: Session, user_id: int, *, commit: bool = True) -> CreditTransaction | None:
+    existing = db.scalars(
+        select(CreditTransaction).where(
+            CreditTransaction.user_id == user_id,
+            CreditTransaction.transaction_type == "super_admin_grant",
+            CreditTransaction.reference_type == "user",
+            CreditTransaction.reference_id == user_id,
+        )
+    ).first()
+    if existing is not None:
+        return existing
+
+    account = get_or_create_account(db, user_id)
+    amount = SUPER_ADMIN_TARGET_CREDITS - account.balance
+    if amount <= 0:
+        return None
+
+    return record_transaction(
+        db,
+        user_id=user_id,
+        amount=amount,
+        transaction_type="super_admin_grant",
+        reason="super_admin_initial_credits",
+        reference_type="user",
+        reference_id=user_id,
+        metadata={"target_balance": SUPER_ADMIN_TARGET_CREDITS},
         commit=commit,
     )
 

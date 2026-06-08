@@ -62,6 +62,7 @@ class AuthUserRead(BaseModel):
     username: str | None = None
     email: str | None = None
     is_active: bool
+    is_admin: bool = False
     created_at: datetime
     credit_balance: int = 0
 

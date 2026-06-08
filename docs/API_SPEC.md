@@ -152,17 +152,24 @@ GET /api/ai-chat/conversations/{conversation_id}/history
 
 ## 8. LLM 渠道说明
 
-当前代码里实际支持 5 个模型渠道：
+当前代码里实际支持多个模型渠道：
 
 - `mock`
 - `openai_compatible`
+- `kakayiduo_chat`
+- `kakayiduo_image`
 - `anthropic_compatible`
 - `moyu`
+- `moyu_image`
 - `dataeye`
+- `seedance`
+- `seedance_video`
 
 兼容别名：
 
 - `gpt-api`
+- `moyu-pic`
+- `ark-video`
 
 说明：
 

@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 from app.core.config import Settings, get_settings
 from app.db.session import SessionLocal
 from app.models.llm_channel import LLMChannel
-from app.schemas.llm_channel import LLMChannelCreate, LLMChannelRead, LLMChannelUpdate
+from app.schemas.llm_channel import LLMChannelCreate, LLMChannelRead, LLMChannelUpdate, normalize_provider
 
 
 CHANNEL_PURPOSE_CHAT = "chat"
@@ -104,7 +104,7 @@ def serialize_channel(channel: LLMChannel) -> LLMChannelRead:
         id=channel.id,
         name=channel.name,
         purpose=channel.purpose,
-        provider=channel.provider,
+        provider=normalized_channel_provider(channel.provider),
         base_url=channel.base_url,
         model=channel.model,
         is_active=channel.is_active,
@@ -118,7 +118,7 @@ def settings_for_channel(channel: LLMChannel, settings: Settings | None = None) 
     base = settings or get_settings()
     return base.model_copy(
         update={
-            "llm_provider": channel.provider,
+            "llm_provider": normalized_channel_provider(channel.provider),
             "llm_base_url": channel.base_url,
             "llm_api_key": channel.api_key,
             "llm_model": channel.model,
@@ -130,7 +130,7 @@ def image_settings_for_channel(channel: LLMChannel, settings: Settings | None = 
     base = settings or get_settings()
     return base.model_copy(
         update={
-            "llm_provider": channel.provider,
+            "llm_provider": normalized_channel_provider(channel.provider),
             "llm_base_url": channel.base_url,
             "llm_api_key": channel.api_key,
             "image_generation_model": channel.model,
@@ -171,7 +171,7 @@ def video_settings_for_channel(channel: LLMChannel, settings: Settings | None = 
     base = settings or get_settings()
     return base.model_copy(
         update={
-            "llm_provider": channel.provider,
+            "llm_provider": normalized_channel_provider(channel.provider),
             "video_generation_base_url": channel.base_url,
             "video_generation_api_key": channel.api_key,
             "video_generation_model": channel.model,
@@ -191,3 +191,10 @@ def get_effective_video_settings(
     with SessionLocal() as local_db:
         active = get_active_channel(local_db, CHANNEL_PURPOSE_VIDEO)
         return video_settings_for_channel(active, base) if active is not None else base
+
+
+def normalized_channel_provider(provider: str) -> str:
+    try:
+        return normalize_provider(provider)
+    except ValueError:
+        return provider.strip().lower().replace("-", "_")

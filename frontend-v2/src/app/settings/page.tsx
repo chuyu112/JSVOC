@@ -25,13 +25,17 @@ const themes = [
   { key: "black", label: "墨翠", dot: "#b8a060", desc: "黑金相映，低调奢华" },
 ];
 
-const providers = [
-  { value: "mock", label: "Mock" },
-  { value: "openai_compatible", label: "OpenAI Compatible" },
-  { value: "dataeye", label: "DataEye" },
-  { value: "moyu", label: "Moyu" },
-  { value: "anthropic_compatible", label: "Anthropic Compatible" },
-  { value: "seedance", label: "Seedance / Ark" },
+const providerOptions = [
+  { value: "kakayiduo_chat", label: "kakayiduo-chat", purposes: ["chat"], defaultBaseUrl: "http://api.kakayiduo.cloud/v1", defaultModel: "gpt-5.5" },
+  { value: "kakayiduo_image", label: "kakayiduo-image", purposes: ["image"], defaultBaseUrl: "http://api.kakayiduo.cloud/v1", defaultModel: "gpt-image-2" },
+  { value: "moyu_image", label: "moyu-image", purposes: ["image"], defaultModel: "gpt-image-2" },
+  { value: "seedance_video", label: "seedance-video", purposes: ["video"], defaultModel: "seedance-2.0" },
+  { value: "mock", label: "Mock", purposes: ["chat"] },
+  { value: "openai_compatible", label: "OpenAI Compatible", purposes: ["chat", "image"] },
+  { value: "dataeye", label: "DataEye", purposes: ["chat"] },
+  { value: "moyu", label: "Moyu Chat", purposes: ["chat"] },
+  { value: "anthropic_compatible", label: "Anthropic Compatible", purposes: ["chat"] },
+  { value: "seedance", label: "Seedance Legacy", purposes: ["video"], defaultModel: "seedance-2.0" },
 ];
 
 const channelPurposes = [
@@ -43,10 +47,10 @@ const channelPurposes = [
 const emptyChannelForm: LLMChannelPayload = {
   name: "",
   purpose: "chat",
-  provider: "openai_compatible",
-  base_url: "",
+  provider: "kakayiduo_chat",
+  base_url: "http://api.kakayiduo.cloud/v1",
   api_key: "",
-  model: "",
+  model: "gpt-5.5",
   is_active: false,
 };
 
@@ -64,7 +68,7 @@ export default function SettingsPage() {
   const [channelError, setChannelError] = useState("");
   const [testMessages, setTestMessages] = useState<Record<number, string>>({});
   const [testingChannelId, setTestingChannelId] = useState<number | null>(null);
-  const isAdmin = auth.user?.username === "chuyu111";
+  const isAdmin = Boolean(auth.user?.is_admin);
 
   useEffect(() => {
     const stored = localStorage.getItem("jade-theme");
@@ -135,7 +139,7 @@ export default function SettingsPage() {
     setChannelForm({
       name: channel.name,
       purpose: channel.purpose,
-      provider: channel.provider,
+      provider: normalizeProviderValue(channel.provider),
       base_url: channel.base_url,
       api_key: "",
       model: channel.model,
@@ -145,22 +149,46 @@ export default function SettingsPage() {
   }
 
   function changeChannelPurpose(purpose: string) {
-    const defaults: Record<string, Pick<LLMChannelPayload, "provider" | "model">> = {
-      chat: { provider: "openai_compatible", model: "" },
-      image: { provider: "openai_compatible", model: "gpt-image-2" },
-      video: { provider: "seedance", model: "seedance-2.0" },
-    };
-    const next = defaults[purpose] || defaults.chat;
+    const next = defaultProviderForPurpose(purpose);
     setChannelForm({
       ...channelForm,
       purpose,
-      provider: next.provider,
-      model: channelForm.model || next.model,
+      provider: next.value,
+      base_url: next.defaultBaseUrl || "",
+      model: next.defaultModel || "",
     });
   }
 
   function purposeLabel(value: string) {
     return channelPurposes.find((item) => item.value === value)?.label || value;
+  }
+
+  function normalizeProviderValue(value: string) {
+    return value.trim().toLowerCase().replaceAll("-", "_");
+  }
+
+  function providerOptionsForPurpose(purpose: string) {
+    return providerOptions.filter((item) => item.purposes.includes(purpose));
+  }
+
+  function defaultProviderForPurpose(purpose: string) {
+    return providerOptionsForPurpose(purpose)[0] || providerOptions[0];
+  }
+
+  function providerLabel(value: string) {
+    const normalized = normalizeProviderValue(value);
+    return providerOptions.find((item) => item.value === normalized)?.label || value;
+  }
+
+  function changeChannelProvider(provider: string) {
+    const normalized = normalizeProviderValue(provider);
+    const option = providerOptions.find((item) => item.value === normalized);
+    setChannelForm({
+      ...channelForm,
+      provider: normalized,
+      base_url: option?.defaultBaseUrl || channelForm.base_url,
+      model: option?.defaultModel || channelForm.model,
+    });
   }
 
   async function saveChannel() {
@@ -188,6 +216,19 @@ export default function SettingsPage() {
       await loadChannels();
     } catch (error) {
       setChannelError(error instanceof Error ? error.message : "模型渠道启用失败");
+    }
+  }
+
+  async function selectActiveChannel(purpose: string, channelId: string) {
+    const id = Number(channelId);
+    if (!id) return;
+
+    setChannelError("");
+    try {
+      await activateLLMChannel(id);
+      await loadChannels();
+    } catch (error) {
+      setChannelError(error instanceof Error ? error.message : `${purposeLabel(purpose)}渠道选择失败`);
     }
   }
 
@@ -344,6 +385,44 @@ export default function SettingsPage() {
             </div>
           )}
 
+          <div className="mb-5 grid grid-cols-1 md:grid-cols-3 gap-3">
+            {channelPurposes.map((purpose) => {
+              const purposeChannels = channels.filter((channel) => channel.purpose === purpose.value);
+              const activeChannel = purposeChannels.find((channel) => channel.is_active);
+
+              return (
+                <label
+                  key={purpose.value}
+                  className="block rounded-[0.75rem] border border-[rgba(255,255,255,0.08)] bg-[rgba(255,255,255,0.03)] p-3"
+                >
+                  <span className="block text-[12px] text-[#9ca3af] mb-1">
+                    当前{purpose.label}渠道
+                  </span>
+                  <select
+                    value={activeChannel?.id ?? ""}
+                    onChange={(event) => selectActiveChannel(purpose.value, event.target.value)}
+                    disabled={purposeChannels.length === 0 || channelsLoading}
+                    className="w-full rounded-[0.5rem] border border-[rgba(255,255,255,0.08)] bg-[#101613] px-3 py-2 text-sm text-[#f5f5f5] outline-none focus:border-[var(--jade-primary)] disabled:opacity-50"
+                  >
+                    <option value="" disabled>
+                      {purposeChannels.length > 0 ? "请选择渠道" : "暂无渠道"}
+                    </option>
+                    {purposeChannels.map((channel) => (
+                      <option key={channel.id} value={channel.id}>
+                        {channel.name} / {providerLabel(channel.provider)} / {channel.model}
+                      </option>
+                    ))}
+                  </select>
+                  <span className="mt-2 block truncate text-[11px] text-[#7a8a82]">
+                    {activeChannel
+                      ? `${providerLabel(activeChannel.provider)} / ${activeChannel.model}`
+                      : "未启用时使用环境变量配置"}
+                  </span>
+                </label>
+              );
+            })}
+          </div>
+
           <div className="grid grid-cols-1 lg:grid-cols-[1fr_1.2fr] gap-5">
             <div className="rounded-[0.75rem] border border-[rgba(255,255,255,0.08)] bg-[rgba(255,255,255,0.03)] p-4">
               <h3 className="text-[15px] font-[680] text-[#f5f5f5] mb-4">
@@ -379,14 +458,21 @@ export default function SettingsPage() {
                   <span className="block text-[12px] text-[#9ca3af] mb-1">Provider</span>
                   <select
                     value={channelForm.provider}
-                    onChange={(event) => setChannelForm({ ...channelForm, provider: event.target.value })}
+                    onChange={(event) => changeChannelProvider(event.target.value)}
                     className="w-full rounded-[0.5rem] border border-[rgba(255,255,255,0.08)] bg-[#101613] px-3 py-2 text-sm text-[#f5f5f5] outline-none focus:border-[var(--jade-primary)]"
                   >
-                    {providers.map((item) => (
+                    {providerOptionsForPurpose(channelForm.purpose).map((item) => (
                       <option key={item.value} value={item.value}>
                         {item.label}
                       </option>
                     ))}
+                    {!providerOptionsForPurpose(channelForm.purpose).some(
+                      (item) => item.value === normalizeProviderValue(channelForm.provider),
+                    ) && (
+                      <option value={normalizeProviderValue(channelForm.provider)}>
+                        {providerLabel(channelForm.provider)}
+                      </option>
+                    )}
                   </select>
                 </label>
 
@@ -481,7 +567,7 @@ export default function SettingsPage() {
                       </div>
                       <div className="mt-2 space-y-1 text-[12px] text-[#9ca3af]">
                         <div>用途：{purposeLabel(channel.purpose)}</div>
-                        <div>Provider：{channel.provider}</div>
+                        <div>Provider：{providerLabel(channel.provider)}</div>
                         <div className="break-all">Base URL：{channel.base_url || "-"}</div>
                         <div>模型：{channel.model}</div>
                       </div>
@@ -493,7 +579,7 @@ export default function SettingsPage() {
                     <div className="flex flex-wrap gap-2">
                       {!channel.is_active && (
                         <button type="button" onClick={() => activateChannel(channel.id)} className="metal-btn text-xs">
-                          启用
+                          设为当前
                         </button>
                       )}
                       <button

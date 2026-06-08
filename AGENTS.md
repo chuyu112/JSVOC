@@ -50,6 +50,13 @@ AI 层：
 - Docker Compose
 - backend、frontend、postgres 三个服务
 
+## 服务器部署信息
+
+- 服务器 IP：8.152.2.222
+- SSH 用户：root
+- 部署目录：/opt/JSVOC
+- 不要把服务器密码、API Key 或其他密钥写入本文件。
+
 ## 重要文档
 
 开始写代码前必须先阅读：

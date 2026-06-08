@@ -6,10 +6,14 @@ from pydantic import BaseModel, Field, field_validator
 SUPPORTED_LLM_CHANNEL_PROVIDERS = {
     "mock",
     "openai_compatible",
+    "kakayiduo_chat",
+    "kakayiduo_image",
     "dataeye",
     "moyu",
+    "moyu_image",
     "anthropic_compatible",
     "seedance",
+    "seedance_video",
 }
 
 SUPPORTED_LLM_CHANNEL_PURPOSES = {"chat", "image", "video"}
@@ -19,8 +23,12 @@ def normalize_provider(value: str) -> str:
     normalized = value.strip().lower().replace("-", "_")
     if normalized == "gpt_api":
         normalized = "openai_compatible"
+    if normalized == "moyu_pic":
+        normalized = "moyu_image"
     if normalized in {"ark", "volcengine", "volcengine_ark"}:
         normalized = "seedance"
+    if normalized == "ark_video":
+        normalized = "seedance_video"
     if normalized not in SUPPORTED_LLM_CHANNEL_PROVIDERS:
         raise ValueError(f"unsupported provider: {value}")
     return normalized

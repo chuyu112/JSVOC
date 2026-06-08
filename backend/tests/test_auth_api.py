@@ -1,4 +1,5 @@
 import unittest
+from unittest.mock import patch
 
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
@@ -35,6 +36,9 @@ class AuthApiTest(unittest.TestCase):
         app.dependency_overrides.clear()
         Base.metadata.drop_all(bind=self.engine)
         self.engine.dispose()
+        from app.core.config import get_settings
+
+        get_settings.cache_clear()
 
     def test_register_login_me_and_logout_flow(self) -> None:
         register_response = self.client.post(
@@ -67,6 +71,50 @@ class AuthApiTest(unittest.TestCase):
         )
         self.assertEqual(login_response.status_code, 200)
         self.assertEqual(login_response.json()["data"]["user"]["email"], "alice@example.com")
+
+    def test_auth_response_marks_admin_from_allowlist(self) -> None:
+        from app.core.config import get_settings
+
+        with patch.dict("os.environ", {"ADMIN_USERNAMES": "adminuser"}):
+            get_settings.cache_clear()
+            register_response = self.client.post(
+                "/api/auth/register",
+                json={
+                    "display_name": "Admin User",
+                    "username": "adminuser",
+                    "email": "admin@example.com",
+                    "password": "StrongPass123",
+                },
+            )
+
+            self.assertEqual(register_response.status_code, 201)
+            self.assertTrue(register_response.json()["data"]["user"]["is_admin"])
+
+            me_response = self.client.get("/api/auth/me")
+            self.assertEqual(me_response.status_code, 200)
+            self.assertTrue(me_response.json()["data"]["user"]["is_admin"])
+
+    def test_chuyu111_is_built_in_super_admin_with_target_credits(self) -> None:
+        register_response = self.client.post(
+            "/api/auth/register",
+            json={
+                "display_name": "chuyu111",
+                "username": "chuyu111",
+                "email": "chuyu111@example.com",
+                "password": "StrongPass123",
+            },
+        )
+
+        self.assertEqual(register_response.status_code, 201)
+        user = register_response.json()["data"]["user"]
+        self.assertTrue(user["is_admin"])
+        self.assertEqual(user["credit_balance"], 1_000_000)
+
+        me_response = self.client.get("/api/auth/me")
+        self.assertEqual(me_response.status_code, 200)
+        me_user = me_response.json()["data"]["user"]
+        self.assertTrue(me_user["is_admin"])
+        self.assertEqual(me_user["credit_balance"], 1_000_000)
 
     def test_register_accepts_chinese_username(self) -> None:
         register_response = self.client.post(

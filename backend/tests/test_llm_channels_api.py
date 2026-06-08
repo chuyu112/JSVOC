@@ -225,6 +225,75 @@ class LLMChannelsApiTest(unittest.TestCase):
         self.assertEqual(call_kwargs["headers"]["Authorization"], "Bearer runtime-secret")
         self.assertEqual(call_kwargs["json"]["model"], "runtime-model")
 
+    def test_kakayiduo_chat_provider_uses_openai_compatible_transport(self) -> None:
+        self.register("chuyu111")
+        create_response = self.client.post(
+            "/api/admin/llm-channels",
+            json={
+                "name": "kakayiduo-chat",
+                "purpose": "chat",
+                "provider": "kakayiduo-chat",
+                "base_url": "http://api.kakayiduo.cloud/v1",
+                "api_key": "kakayiduo-secret",
+                "model": "gpt-5.5",
+                "is_active": True,
+            },
+        )
+        self.assertEqual(create_response.status_code, 201)
+        created = create_response.json()["data"]
+        self.assertEqual(created["provider"], "kakayiduo_chat")
+        channel_id = created["id"]
+
+        fake_response = Mock()
+        fake_response.raise_for_status.return_value = None
+        fake_response.json.return_value = {
+            "model": "gpt-5.5",
+            "choices": [{"message": {"content": "{\"ok\": true}"}}],
+            "usage": {"total_tokens": 3},
+        }
+
+        with patch("app.llm.llm_gateway._post_json", return_value=fake_response) as post_json:
+            test_response = self.client.post(f"/api/admin/llm-channels/{channel_id}/test")
+
+        self.assertEqual(test_response.status_code, 200)
+        payload = test_response.json()["data"]
+        self.assertTrue(payload["success"])
+        self.assertEqual(payload["provider"], "kakayiduo_chat")
+        self.assertEqual(post_json.call_args.args[0], "http://api.kakayiduo.cloud/v1/chat/completions")
+
+    def test_legacy_provider_names_are_renamed(self) -> None:
+        self.register("chuyu111")
+
+        image_response = self.client.post(
+            "/api/admin/llm-channels",
+            json={
+                "name": "Moyu Image",
+                "purpose": "image",
+                "provider": "moyu-pic",
+                "base_url": "https://image.example.com/v1",
+                "api_key": "image-secret",
+                "model": "gpt-image-2",
+                "is_active": True,
+            },
+        )
+        self.assertEqual(image_response.status_code, 201)
+        self.assertEqual(image_response.json()["data"]["provider"], "moyu_image")
+
+        video_response = self.client.post(
+            "/api/admin/llm-channels",
+            json={
+                "name": "Seedance Video",
+                "purpose": "video",
+                "provider": "ark-video",
+                "base_url": "https://ark.example.com",
+                "api_key": "video-secret",
+                "model": "seedance-2.0",
+                "is_active": True,
+            },
+        )
+        self.assertEqual(video_response.status_code, 201)
+        self.assertEqual(video_response.json()["data"]["provider"], "seedance_video")
+
     def test_image_channel_test_uses_image_generation_endpoint(self) -> None:
         self.register("chuyu111")
         create_response = self.client.post(
@@ -267,6 +336,43 @@ class LLMChannelsApiTest(unittest.TestCase):
         self.assertEqual(call_kwargs["headers"]["Authorization"], "Bearer image-secret")
         self.assertEqual(call_kwargs["json"]["model"], "gpt-image-2")
 
+    def test_kakayiduo_image_channel_test_uses_image_generation_endpoint(self) -> None:
+        self.register("chuyu111")
+        create_response = self.client.post(
+            "/api/admin/llm-channels",
+            json={
+                "name": "kakayiduo-image",
+                "purpose": "image",
+                "provider": "kakayiduo-image",
+                "base_url": "http://api.kakayiduo.cloud/v1",
+                "api_key": "image-secret",
+                "model": "gpt-image-2",
+                "is_active": True,
+            },
+        )
+        self.assertEqual(create_response.status_code, 201)
+        created = create_response.json()["data"]
+        self.assertEqual(created["provider"], "kakayiduo_image")
+        channel_id = created["id"]
+
+        fake_response = Mock()
+        fake_response.status_code = 200
+        fake_response.raise_for_status.return_value = None
+        fake_response.json.return_value = {
+            "model": "gpt-image-2",
+            "data": [{"b64_json": "aW1hZ2U="}],
+            "usage": {"total_tokens": 1},
+        }
+
+        with patch("app.services.image_generation_service.httpx.post", return_value=fake_response) as post_image:
+            test_response = self.client.post(f"/api/admin/llm-channels/{channel_id}/test")
+
+        self.assertEqual(test_response.status_code, 200)
+        payload = test_response.json()["data"]
+        self.assertTrue(payload["success"])
+        self.assertEqual(payload["provider"], "kakayiduo_image")
+        self.assertEqual(post_image.call_args.args[0], "http://api.kakayiduo.cloud/v1/images/generations")
+
     def test_video_channel_test_checks_config_without_submitting_task(self) -> None:
         self.register("chuyu111")
         create_response = self.client.post(
@@ -274,7 +380,7 @@ class LLMChannelsApiTest(unittest.TestCase):
             json={
                 "name": "Video Runtime",
                 "purpose": "video",
-                "provider": "seedance",
+                "provider": "seedance-video",
                 "base_url": "https://ark.example.com",
                 "api_key": "video-secret",
                 "model": "seedance-2.0",
@@ -296,7 +402,7 @@ class LLMChannelsApiTest(unittest.TestCase):
         self.assertEqual(test_response.status_code, 200)
         payload = test_response.json()["data"]
         self.assertTrue(payload["success"])
-        self.assertEqual(payload["provider"], "seedance")
+        self.assertEqual(payload["provider"], "seedance_video")
         self.assertEqual(payload["model"], "doubao-seedance-2-0-260128")
 
 

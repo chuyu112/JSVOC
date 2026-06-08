@@ -46,7 +46,7 @@ def generate_image(
 ) -> ImageGenerateResponse:
     settings = settings or get_effective_image_settings(db)
     started_at = time.perf_counter()
-    provider = settings.llm_provider.strip().lower().replace("-", "_") or "unknown"
+    provider = image_provider(settings)
     endpoint = image_generations_url(settings)
     headers = {"Content-Type": "application/json"}
     if settings.llm_api_key:
@@ -85,7 +85,7 @@ def edit_image(payload: ImageEditRequest, db: Session | None = None) -> ImageGen
 
     settings = get_effective_image_settings(db)
     started_at = time.perf_counter()
-    provider = settings.llm_provider.strip().lower().replace("-", "_") or "unknown"
+    provider = image_provider(settings)
     endpoint = image_edits_url(settings)
     headers = {}
     if settings.llm_api_key:
@@ -130,6 +130,13 @@ def image_generations_url(settings: Settings) -> str:
     if base_url.endswith("/v1"):
         return f"{base_url}/images/generations"
     return f"{base_url}/v1/images/generations"
+
+
+def image_provider(settings: Settings) -> str:
+    provider = settings.llm_provider.strip().lower().replace("-", "_") or "unknown"
+    if provider == "moyu_pic":
+        return "moyu_image"
+    return provider
 
 
 def image_model(settings: Settings) -> str:

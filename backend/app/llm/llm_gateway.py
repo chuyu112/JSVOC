@@ -102,7 +102,14 @@ class LLMGateway:
 
         if provider == "mock":
             result = self._generate_mock(request)
-        elif provider in {"openai_compatible", "dataeye", "moyu"}:
+        elif provider in {
+            "openai_compatible",
+            "kakayiduo_chat",
+            "kakayiduo_image",
+            "dataeye",
+            "moyu",
+            "moyu_image",
+        }:
             result = self._generate_openai_compatible(request, provider=provider)
         elif provider == "anthropic_compatible":
             result = self._generate_anthropic_compatible(request)
@@ -1112,6 +1119,10 @@ class LLMGateway:
         provider = self.settings.llm_provider.strip().lower().replace("-", "_")
         if provider == "gpt_api":
             return "openai_compatible"
+        if provider == "moyu_pic":
+            return "moyu_image"
+        if provider == "ark_video":
+            return "seedance_video"
         return provider
 
     def _deepseek_openai_options(self, request: LLMGatewayRequest, model: str) -> dict[str, Any]:

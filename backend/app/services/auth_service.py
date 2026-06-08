@@ -17,6 +17,7 @@ from app.services import credit_service
 
 
 SUPPORTED_AUTH_PROVIDERS = {"username", "email"}
+BUILT_IN_SUPER_ADMIN_USERNAMES = {"chuyu111"}
 
 
 def normalize_identity(value: str) -> str:
@@ -197,6 +198,31 @@ def get_current_user_from_request(
     return user
 
 
+def is_admin_user(db: Session, user: User, settings: Settings | None = None) -> bool:
+    settings = settings or get_settings()
+    allowed = {
+        item.strip().lower()
+        for item in settings.admin_usernames.split(",")
+        if item.strip()
+    }
+    allowed.update(BUILT_IN_SUPER_ADMIN_USERNAMES)
+    if not allowed:
+        return False
+
+    account = db.scalars(
+        select(AuthAccount).where(
+            AuthAccount.user_id == user.id,
+            AuthAccount.provider_type == "username",
+        )
+    ).first()
+    username = account.provider_key.strip().lower() if account else ""
+    return username in allowed
+
+
+def is_built_in_super_admin_username(username: str | None) -> bool:
+    return (username or "").strip().lower() in BUILT_IN_SUPER_ADMIN_USERNAMES
+
+
 def build_auth_user_read(db: Session, user: User) -> AuthUserRead:
     accounts = list(
         db.scalars(select(AuthAccount).where(AuthAccount.user_id == user.id)).all()
@@ -209,12 +235,16 @@ def build_auth_user_read(db: Session, user: User) -> AuthUserRead:
         (account.provider_key for account in accounts if account.provider_type == "email"),
         None,
     )
+    if is_built_in_super_admin_username(username):
+        credit_service.grant_super_admin_target_balance(db, user.id)
+
     return AuthUserRead(
         id=user.id,
         display_name=user.display_name,
         username=username,
         email=email,
         is_active=user.is_active,
+        is_admin=is_admin_user(db, user),
         created_at=user.created_at,
         credit_balance=credit_service.get_balance(db, user.id),
     )
