@@ -21,6 +21,7 @@ RUN pip install --no-cache-dir --timeout "${PIP_DEFAULT_TIMEOUT}" --retries "${P
 COPY alembic.ini .
 COPY alembic ./alembic
 COPY app ./app
+COPY scripts ./scripts
 
 EXPOSE 8000
 

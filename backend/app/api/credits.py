@@ -5,7 +5,7 @@ from app.api.dependencies import get_current_user
 from app.db.session import get_db
 from app.models.user import User
 from app.schemas.credit import CreditAccountRead, CreditPackageRead, CreditTransactionRead
-from app.services import credit_service
+from app.services import auth_service, credit_service
 
 
 router = APIRouter(prefix="/api/credits", tags=["credits"])
@@ -20,6 +20,7 @@ def get_credit_balance(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> dict[str, object]:
+    auth_service.ensure_user_credit_entitlements(db, current_user)
     account = credit_service.get_or_create_account(db, current_user.id)
     db.commit()
     db.refresh(account)

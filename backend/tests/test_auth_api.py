@@ -2,7 +2,7 @@ import unittest
 from unittest.mock import patch
 
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, select
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
@@ -117,6 +117,45 @@ class AuthApiTest(unittest.TestCase):
         self.assertTrue(me_user["is_admin"])
         self.assertEqual(me_user["display_name"], "刘抗抗")
         self.assertEqual(me_user["credit_balance"], 1_000_000)
+
+    def test_chuyu111_credit_balance_endpoint_does_not_refill_after_initial_grant(self) -> None:
+        from app.models.credit import CreditTransaction
+        from app.services import credit_service
+
+        register_response = self.client.post(
+            "/api/auth/register",
+            json={
+                "display_name": "chuyu111",
+                "username": "chuyu111",
+                "email": "chuyu111@example.com",
+                "password": "StrongPass123",
+            },
+        )
+        self.assertEqual(register_response.status_code, 201)
+        user_id = register_response.json()["data"]["user"]["id"]
+
+        with self.SessionLocal() as db:
+            credit_service.charge_credits(
+                db,
+                user_id=user_id,
+                cost=1_000,
+                reason="video_generation",
+                reference_type="generation_task",
+                reference_id=123,
+            )
+
+        balance_response = self.client.get("/api/credits/balance")
+
+        self.assertEqual(balance_response.status_code, 200)
+        self.assertEqual(balance_response.json()["data"]["balance"], 999_000)
+        with self.SessionLocal() as db:
+            top_up = db.scalars(
+                select(CreditTransaction).where(
+                    CreditTransaction.user_id == user_id,
+                    CreditTransaction.transaction_type == "super_admin_top_up",
+                )
+            ).first()
+            self.assertIsNone(top_up)
 
     def test_register_accepts_chinese_username(self) -> None:
         register_response = self.client.post(

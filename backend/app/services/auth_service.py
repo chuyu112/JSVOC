@@ -224,6 +224,29 @@ def is_built_in_super_admin_username(username: str | None) -> bool:
     return (username or "").strip().lower() in BUILT_IN_SUPER_ADMIN_USERNAMES
 
 
+def ensure_user_credit_entitlements(db: Session, user: User) -> None:
+    username = get_username_for_user(db, user)
+    if not is_built_in_super_admin_username(username):
+        return
+
+    display_name = BUILT_IN_SUPER_ADMIN_DISPLAY_NAMES.get(username or "")
+    if display_name and user.display_name != display_name:
+        user.display_name = display_name
+        db.commit()
+        db.refresh(user)
+    credit_service.grant_super_admin_target_balance(db, user.id)
+
+
+def get_username_for_user(db: Session, user: User) -> str | None:
+    account = db.scalars(
+        select(AuthAccount).where(
+            AuthAccount.user_id == user.id,
+            AuthAccount.provider_type == "username",
+        )
+    ).first()
+    return account.provider_key if account else None
+
+
 def build_auth_user_read(db: Session, user: User) -> AuthUserRead:
     accounts = list(
         db.scalars(select(AuthAccount).where(AuthAccount.user_id == user.id)).all()
@@ -236,13 +259,7 @@ def build_auth_user_read(db: Session, user: User) -> AuthUserRead:
         (account.provider_key for account in accounts if account.provider_type == "email"),
         None,
     )
-    if is_built_in_super_admin_username(username):
-        display_name = BUILT_IN_SUPER_ADMIN_DISPLAY_NAMES.get(username or "")
-        if display_name and user.display_name != display_name:
-            user.display_name = display_name
-            db.commit()
-            db.refresh(user)
-        credit_service.grant_super_admin_target_balance(db, user.id)
+    ensure_user_credit_entitlements(db, user)
 
     return AuthUserRead(
         id=user.id,

@@ -134,7 +134,7 @@ def grant_registration_bonus(db: Session, user_id: int, *, commit: bool = True) 
 
 
 def grant_super_admin_target_balance(db: Session, user_id: int, *, commit: bool = True) -> CreditTransaction | None:
-    existing = db.scalars(
+    existing_initial_grant = db.scalars(
         select(CreditTransaction).where(
             CreditTransaction.user_id == user_id,
             CreditTransaction.transaction_type == "super_admin_grant",
@@ -142,8 +142,8 @@ def grant_super_admin_target_balance(db: Session, user_id: int, *, commit: bool 
             CreditTransaction.reference_id == user_id,
         )
     ).first()
-    if existing is not None:
-        return existing
+    if existing_initial_grant is not None:
+        return None
 
     account = get_or_create_account(db, user_id)
     amount = SUPER_ADMIN_TARGET_CREDITS - account.balance
@@ -155,7 +155,7 @@ def grant_super_admin_target_balance(db: Session, user_id: int, *, commit: bool 
         user_id=user_id,
         amount=amount,
         transaction_type="super_admin_grant",
-        reason="super_admin_initial_credits",
+        reason="super_admin_target_balance",
         reference_type="user",
         reference_id=user_id,
         metadata={"target_balance": SUPER_ADMIN_TARGET_CREDITS},

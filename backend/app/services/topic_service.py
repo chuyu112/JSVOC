@@ -199,7 +199,7 @@ def generate_topics_batch(
         "generated_count": len(all_topics),
         "target_count": payload.target_count,
         "provider": provider or "openai_compatible",
-        "model": model or "gpt5.5",
+        "model": model or "gpt-5.5",
         "latency_ms": elapsed,
         "usage": {"total_tokens": total_tokens},
     }

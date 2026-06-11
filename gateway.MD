@@ -28,23 +28,23 @@
 
 ```env
 LLM_PROVIDER=kakayiduo
-LLM_BASE_URL=https://api.kakayiduo.cloud/v1
-LLM_MODEL=gpt5.5
+LLM_BASE_URL=http://43.173.105.8:8080/v1
+LLM_MODEL=gpt-5.5
 ACCOUNT_PACKAGE_MODEL=
 EXECUTION_PLAN_MODEL=
 ```
 
 Chat 可选模型：
 
-- `gpt5.5`
-- `gpt5.4-mini`
+- `gpt-5.5`
+- `gpt-5.4-mini`
 
 接口地址：
 
 ```text
-https://api.kakayiduo.cloud/v1/chat/completions
-https://api.kakayiduo.cloud/v1/images/generations
-https://api.kakayiduo.cloud/v1/images/edits
+http://43.173.105.8:8080/v1/chat/completions
+http://43.173.105.8:8080/v1/images/generations
+http://43.173.105.8:8080/v1/images/edits
 ```
 
 ## 其他渠道

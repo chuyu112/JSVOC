@@ -1,31 +1,20 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { motion, AnimatePresence } from "framer-motion";
-import { X } from "@phosphor-icons/react";
 import { api } from "@/lib/api/client";
 import {
   editImageAsync,
   enhanceImagePrompt,
   generateImageAsync,
-  type GeneratedImage,
   type ImageGenerateResponse,
   type ImageQuality,
-  type ImageReferenceInput,
   type ImageSize,
 } from "@/lib/api/images";
-import TypingIndicator from "@/components/ui/TypingIndicator";
-import AIGeneratedBadge from "@/components/ui/AIGeneratedBadge";
-import GlassSelect from "@/components/ui/GlassSelect";
-
-type GenMode = "text" | "image";
-type RefType = "persona" | "product" | "location";
-
-interface LocalReferenceImage extends ImageReferenceInput {
-  id: string;
-  preview: string;
-  selected: boolean;
-}
+import ImageStudioWorkspace, {
+  type ImageStudioMode,
+  type ImageStudioReferenceImage,
+  type ImageStudioRefType,
+} from "@/components/ImageStudioWorkspace";
 
 interface TaskStatus {
   id: number;
@@ -34,44 +23,11 @@ interface TaskStatus {
   error_message: string | null;
 }
 
-const refMeta: Record<RefType, { label: string; note: string }> = {
-  persona: {
-    label: "人设参考图",
-    note: "人物、模特、账号本人等参考，只在本次生成中使用。",
-  },
-  product: {
-    label: "货品参考图",
-    note: "产品、包装、材质、细节等参考，只在本次生成中使用。",
-  },
-  location: {
-    label: "场景参考图",
-    note: "店铺、街景、办公室、直播间等参考，只在本次生成中使用。",
-  },
-};
-
-const sizeOptions: ImageSize[] = [
-  "1024x1536",
-  "1024x1024",
-  "1536x1024",
-  "2048x1152",
-  "1152x2048",
-  "auto",
-];
-const qualityOptions: ImageQuality[] = ["high", "medium", "low", "auto"];
-const countOptions = [1, 2, 3, 4];
-const sizeLabels: Record<ImageSize, string> = {
-  "1024x1536": "竖屏 1024x1536",
-  "1024x1024": "方屏 1024x1024",
-  "1536x1024": "横屏 1536x1024",
-  "2048x1152": "2K 横屏 2048x1152",
-  "1152x2048": "2K 竖屏 1152x2048",
-  auto: "自动",
-};
-const qualityLabels: Record<ImageQuality, string> = {
-  high: "高清（high）",
-  medium: "标准（medium）",
-  low: "快速（low）",
-  auto: "自动（auto）",
+const IMAGE_REFERENCE_PATTERN = /@图片(\d+)/g;
+const EMPTY_REFERENCE_IMAGES: Record<ImageStudioRefType, ImageStudioReferenceImage[]> = {
+  persona: [],
+  product: [],
+  location: [],
 };
 
 function readFileAsDataUrl(file: File): Promise<string> {
@@ -82,12 +38,6 @@ function readFileAsDataUrl(file: File): Promise<string> {
     reader.readAsDataURL(file);
   });
 }
-
-function imageDisplayUrl(image: GeneratedImage) {
-  return image.url || image.data_url || (image.b64_json ? `data:${image.mime_type || "image/png"};base64,${image.b64_json}` : "");
-}
-
-const IMAGE_REFERENCE_PATTERN = /@图片(\d+)/g;
 
 function normalizeImageReferenceName(value: string | undefined) {
   if (!value) return "";
@@ -104,15 +54,9 @@ function extractImageReferenceNames(text: string) {
 }
 
 export default function ImagesEntryPage() {
-  const [mode, setMode] = useState<GenMode>("text");
-  const [textPrompt, setTextPrompt] = useState("");
-  const [editPrompt, setEditPrompt] = useState("");
-  const [referenceImages, setReferenceImages] = useState<Record<RefType, LocalReferenceImage[]>>({
-    persona: [],
-    product: [],
-    location: [],
-  });
-
+  const [prompt, setPrompt] = useState("");
+  const [referenceImages, setReferenceImages] =
+    useState<Record<ImageStudioRefType, ImageStudioReferenceImage[]>>(EMPTY_REFERENCE_IMAGES);
   const [size, setSize] = useState<ImageSize>("1024x1536");
   const [quality, setQuality] = useState<ImageQuality>("medium");
   const [n, setN] = useState(1);
@@ -124,10 +68,8 @@ export default function ImagesEntryPage() {
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const referenceImageIdRef = useRef(0);
 
-  const currentPrompt = mode === "text" ? textPrompt : editPrompt;
-  const totalRefCount = Object.values(referenceImages).reduce((sum, arr) => sum + arr.length, 0);
   const flatReferenceImages = Object.values(referenceImages).flat();
-  const promptImageReferenceNames = extractImageReferenceNames(editPrompt);
+  const promptImageReferenceNames = extractImageReferenceNames(prompt);
   const activeReferenceImages = flatReferenceImages.filter(
     (img) =>
       img.selected ||
@@ -137,17 +79,13 @@ export default function ImagesEntryPage() {
   const unknownPromptImageReferences = Array.from(promptImageReferenceNames).filter(
     (name) => !flatReferenceImages.some((img) => normalizeImageReferenceName(img.reference_image_name) === name),
   );
+  const mode: ImageStudioMode = activeReferenceImages.length > 0 ? "image" : "text";
 
-  function updatePrompt(value: string) {
-    if (mode === "text") setTextPrompt(value);
-    else setEditPrompt(value);
-  }
-
-  function refsByType(type: RefType) {
+  function refsByType(type: ImageStudioRefType) {
     return referenceImages[type];
   }
 
-  function nextReferenceImageName(existing: LocalReferenceImage[]) {
+  function nextReferenceImageName(existing: ImageStudioReferenceImage[]) {
     const maxNumber = existing.reduce((max, img) => {
       const match = normalizeImageReferenceName(img.reference_image_name).match(/^@图片(\d+)$/);
       return match ? Math.max(max, Number(match[1])) : max;
@@ -155,20 +93,7 @@ export default function ImagesEntryPage() {
     return `@图片${maxNumber + 1}`;
   }
 
-  function toggleReferenceImage(type: RefType, id: string) {
-    setReferenceImages((prev) => ({
-      ...prev,
-      [type]: prev[type].map((img) => (img.id === id ? { ...img, selected: !img.selected } : img)),
-    }));
-  }
-
-  function appendReferenceMention(referenceName: string | undefined) {
-    const normalized = normalizeImageReferenceName(referenceName);
-    if (!normalized) return;
-    setEditPrompt((prev) => `${prev}${prev.trim() ? " " : ""}${normalized}`);
-  }
-
-  async function handleReferenceImageChange(event: React.ChangeEvent<HTMLInputElement>, type: RefType) {
+  async function handleReferenceImageChange(event: React.ChangeEvent<HTMLInputElement>, type: ImageStudioRefType) {
     const files = Array.from(event.target.files || []);
     if (!files.length) return;
 
@@ -180,7 +105,7 @@ export default function ImagesEntryPage() {
     }
 
     const supported = ["image/png", "image/jpeg", "image/jpg", "image/webp"];
-    const newImages: LocalReferenceImage[] = [];
+    const newImages: ImageStudioReferenceImage[] = [];
 
     for (const file of files.slice(0, availableSlots)) {
       if (!supported.includes(file.type.toLowerCase())) {
@@ -211,12 +136,25 @@ export default function ImagesEntryPage() {
     event.target.value = "";
   }
 
-  function removeReferenceImage(type: RefType, id: string) {
+  function toggleReferenceImage(type: ImageStudioRefType, id: string) {
+    setReferenceImages((prev) => ({
+      ...prev,
+      [type]: prev[type].map((img) => (img.id === id ? { ...img, selected: !img.selected } : img)),
+    }));
+  }
+
+  function removeReferenceImage(type: ImageStudioRefType, id: string) {
     setReferenceImages((prev) => ({ ...prev, [type]: prev[type].filter((img) => img.id !== id) }));
   }
 
-  function clearReferenceImages(type: RefType) {
+  function clearReferenceImages(type: ImageStudioRefType) {
     setReferenceImages((prev) => ({ ...prev, [type]: [] }));
+  }
+
+  function appendReferenceMention(referenceName: string | undefined) {
+    const normalized = normalizeImageReferenceName(referenceName);
+    if (!normalized) return;
+    setPrompt((prev) => `${prev}${prev.trim() ? " " : ""}${normalized}`);
   }
 
   const stopPolling = useCallback(() => {
@@ -252,21 +190,13 @@ export default function ImagesEntryPage() {
   }, [stopPolling]);
 
   async function handleGenerate() {
-    const cleanPrompt = currentPrompt.trim();
+    const cleanPrompt = prompt.trim();
     if (!cleanPrompt) {
       alert("请输入图片生成提示词");
       return;
     }
-    if (mode === "image" && totalRefCount < 1) {
-      alert("图生图至少要上传一张参考图");
-      return;
-    }
-    if (mode === "image" && unknownPromptImageReferences.length > 0) {
+    if (unknownPromptImageReferences.length > 0) {
       alert(`这些图片引用不存在：${unknownPromptImageReferences.join("、")}`);
-      return;
-    }
-    if (mode === "image" && activeReferenceImages.length < 1) {
-      alert("请至少选中一张参考图，或在提示词中引用 @图片N");
       return;
     }
 
@@ -282,10 +212,10 @@ export default function ImagesEntryPage() {
           ? await editImageAsync(
               null,
               cleanPrompt,
-              activeReferenceImages.map(({ id, preview, selected, ...rest }) => rest),
+              activeReferenceImages.map(({ id, preview, backendId, selected, ...rest }) => rest),
               n,
               size,
-              quality
+              quality,
             )
           : await generateImageAsync(null, cleanPrompt, n, size, quality);
       setTask({ id: res.task_id, status: res.status as TaskStatus["status"], result_data: null, error_message: null });
@@ -297,7 +227,7 @@ export default function ImagesEntryPage() {
   }
 
   async function handleEnhancePrompt() {
-    const cleanPrompt = currentPrompt.trim();
+    const cleanPrompt = prompt.trim();
     if (!cleanPrompt) {
       alert("请输入需要优化的提示词");
       return;
@@ -307,7 +237,7 @@ export default function ImagesEntryPage() {
     setError("");
     try {
       const response = await enhanceImagePrompt(null, cleanPrompt, mode, size, quality);
-      updatePrompt(response.enhanced_prompt);
+      setPrompt(response.enhanced_prompt);
     } catch (err) {
       setError(err instanceof Error ? err.message : "提示词优化失败");
     } finally {
@@ -334,382 +264,35 @@ export default function ImagesEntryPage() {
   }
 
   return (
-    <section className="page-section">
-      <motion.div
-        initial={{ opacity: 0, y: 24 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
-        className="section-header"
-      >
-        <div>
-          <p className="eyebrow">Image Generation</p>
-          <h1 className="text-[28px] md:text-[36px] font-bold leading-[1.15] tracking-[-0.02em] text-[#f5f5f5]">
-            AI图片生成
-          </h1>
-        </div>
-      </motion.div>
-
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1], delay: 0.1 }}
-        className="image-mode-tabs flex items-center gap-2 mb-5"
-      >
-        <button
-          onClick={() => setMode("text")}
-          className={`metal-btn ${mode === "text" ? "metal-btn-primary" : ""}`}
-        >
-          <span className="text-sm">文生图</span>
-          <span className="text-xs opacity-70 ml-1">输入提示词直接生成</span>
-        </button>
-        <button
-          onClick={() => setMode("image")}
-          className={`metal-btn ${mode === "image" ? "metal-btn-primary" : ""}`}
-        >
-          <span className="text-sm">图生图</span>
-          <span className="text-xs opacity-70 ml-1">上传参考图再改图</span>
-        </button>
-      </motion.div>
-
-      <AnimatePresence mode="wait">
-        {mode === "text" ? (
-          <motion.div
-            key="text"
-            initial={{ opacity: 0, x: -10 }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: 10 }}
-            transition={{ duration: 0.25 }}
-          >
-            <div className="glass card-hover p-5 mb-6">
-              <div className="flex flex-col gap-4">
-                <div>
-                  <label className="text-[12px] font-[540] text-[#9ca3af] mb-1.5 block">提示词</label>
-                  <textarea
-                    className="input-glass w-full min-h-[150px] resize-y"
-                    placeholder="描述你想生成的图片内容。全局入口不会自动带入任何项目、账号或人设。"
-                    value={textPrompt}
-                    onChange={(e) => setTextPrompt(e.target.value)}
-                  />
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <GlassSelect
-                    label="尺寸"
-                    value={size}
-                    onChange={(v) => setSize(v as ImageSize)}
-                    options={sizeOptions}
-                    renderLabel={(v) => sizeLabels[v as ImageSize] || String(v)}
-                  />
-                  <GlassSelect
-                    label="质量"
-                    value={quality}
-                    onChange={(v) => setQuality(v as ImageQuality)}
-                    options={qualityOptions}
-                    renderLabel={(v) => qualityLabels[v as ImageQuality] || String(v)}
-                  />
-                  <GlassSelect label="数量" value={n} onChange={(v) => setN(Number(v))} options={countOptions} />
-                </div>
-                <div className="image-action-row flex justify-end gap-2">
-                  <button onClick={() => setTextPrompt("")} className="image-action-btn metal-btn text-sm">
-                    重置提示词
-                  </button>
-                  <button
-                    onClick={handleEnhancePrompt}
-                    disabled={enhancingPrompt || generating}
-                    className="image-action-btn metal-btn text-sm"
-                  >
-                    {enhancingPrompt ? (
-                      <span className="flex items-center gap-2">
-                        <span className="btn-spinner" />
-                        优化中
-                      </span>
-                    ) : (
-                      "提示词优化"
-                    )}
-                  </button>
-                  <button onClick={handleGenerate} disabled={generating} className="image-action-btn metal-btn metal-btn-primary">
-                    {generating ? (
-                      <span className="flex items-center gap-2">
-                        <span className="btn-spinner" />
-                        生成中
-                      </span>
-                    ) : (
-                      "生成图片"
-                    )}
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            {generating ? <ImageLoadingState text="AI 正在绘制图片..." /> : null}
-            {error && !result ? <ErrorState error={error} /> : null}
-            {result ? <ResultGallery result={result} onCopy={copyImageUrl} onDownload={downloadImage} /> : null}
-          </motion.div>
-        ) : (
-          <motion.div
-            key="image"
-            initial={{ opacity: 0, x: -10 }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: 10 }}
-            transition={{ duration: 0.25 }}
-            className="grid grid-cols-1 lg:grid-cols-[400px_1fr] gap-5"
-          >
-            <div className="flex flex-col gap-3">
-              {(["persona", "product", "location"] as RefType[]).map((type) => (
-                <div key={type} className="glass card-hover p-3 flex flex-col gap-2">
-                  <div className="flex items-center justify-between">
-                    <span className="text-[13px] font-medium text-[#f5f5f5]">{refMeta[type].label}</span>
-                    <span className="text-xs text-[#6b7280] bg-[rgba(255,255,255,0.04)] px-2 py-0.5 rounded-full">
-                      {refsByType(type).length}/3
-                    </span>
-                  </div>
-                  <p className="text-[10px] leading-4 text-[#6b7280]">{refMeta[type].note}</p>
-
-                  {refsByType(type).length > 0 && (
-                    <div className="flex flex-wrap gap-2">
-                      {refsByType(type).map((img) => {
-                        const isActive =
-                          img.selected ||
-                          promptImageReferenceNames.has(normalizeImageReferenceName(img.reference_image_name));
-                        return (
-                        <div
-                          key={img.id}
-                          onClick={() => toggleReferenceImage(type, img.id)}
-                          className="flat-delete-target w-[68px] h-[68px] cursor-pointer rounded-[0.45rem] overflow-hidden border transition-colors"
-                          style={{
-                            borderColor: isActive ? "rgba(127,220,146,0.5)" : "rgba(255,255,255,0.06)",
-                            background: isActive ? "rgba(127,220,146,0.08)" : "rgba(255,255,255,0.03)",
-                          }}
-                        >
-                          <img src={img.preview} alt={img.source_image_filename} className="w-full h-full object-cover" />
-                          {img.reference_image_name ? (
-                            <button
-                              type="button"
-                              onClick={(event) => {
-                                event.stopPropagation();
-                                appendReferenceMention(img.reference_image_name);
-                              }}
-                              className="absolute left-1 bottom-1 rounded bg-[rgba(0,0,0,0.62)] px-1.5 py-0.5 text-[10px] font-semibold leading-none text-white"
-                              title={`插入 ${img.reference_image_name}`}
-                            >
-                              {img.reference_image_name}
-                            </button>
-                          ) : null}
-                          <button
-                            onClick={(event) => {
-                              event.stopPropagation();
-                              removeReferenceImage(type, img.id);
-                            }}
-                            className="flat-delete-action"
-                            title="删除"
-                            aria-label="删除参考图"
-                          >
-                            <X size={13} weight="bold" />
-                          </button>
-                        </div>
-                        );
-                      })}
-                    </div>
-                  )}
-
-                  <label className="flex flex-col items-center justify-center gap-0.5 min-h-[52px] rounded-[0.65rem] border border-dashed border-[rgba(255,255,255,0.1)] bg-[rgba(255,255,255,0.02)] cursor-pointer hover:bg-[rgba(255,255,255,0.04)] transition-colors">
-                    <input
-                      type="file"
-                      accept="image/*"
-                      multiple
-                      className="hidden"
-                      onChange={(e) => handleReferenceImageChange(e, type)}
-                    />
-                    <span className="text-[12px] text-[#9ca3af]">上传{refMeta[type].label}</span>
-                    <span className="text-xs text-[#6b7280]">最多 3 张</span>
-                  </label>
-
-                  {refsByType(type).length > 0 && (
-                    <button
-                      onClick={() => clearReferenceImages(type)}
-                      className="text-[11px] text-[#6b7280] hover:text-[#f5f5f5] self-end transition-colors"
-                    >
-                      清空本类
-                    </button>
-                  )}
-                </div>
-              ))}
-            </div>
-
-            <div className="flex flex-col gap-4">
-              <div className="glass card-hover p-5">
-                <label className="text-[12px] font-[540] text-[#9ca3af] mb-1.5 block">图片提示词</label>
-                <textarea
-                  className="input-glass w-full min-h-[260px] resize-y leading-7"
-                  placeholder="@图片1 和 @图片2 一起去 @图片3 吃饭，保持各自外观特征和场景关系"
-                  value={editPrompt}
-                  onChange={(e) => setEditPrompt(e.target.value)}
-                />
-                {totalRefCount > 0 && (
-                  <p className="mt-2 text-[12px] text-[#6b7280]">
-                    本次使用 {activeReferenceImages.length} / {totalRefCount} 张参考图。点击图片可选中/取消，点击 @图片N 可插入提示词。
-                  </p>
-                )}
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-3">
-                  <GlassSelect
-                    label="尺寸"
-                    value={size}
-                    onChange={(v) => setSize(v as ImageSize)}
-                    options={sizeOptions}
-                    renderLabel={(v) => sizeLabels[v as ImageSize] || String(v)}
-                  />
-                  <GlassSelect
-                    label="质量"
-                    value={quality}
-                    onChange={(v) => setQuality(v as ImageQuality)}
-                    options={qualityOptions}
-                    renderLabel={(v) => qualityLabels[v as ImageQuality] || String(v)}
-                  />
-                  <GlassSelect label="数量" value={n} onChange={(v) => setN(Number(v))} options={countOptions} />
-                </div>
-                <div className="image-action-row flex justify-end gap-2 mt-3">
-                  <button onClick={() => setEditPrompt("")} className="image-action-btn metal-btn text-sm">
-                    重置提示词
-                  </button>
-                  <button
-                    onClick={handleEnhancePrompt}
-                    disabled={enhancingPrompt || generating}
-                    className="image-action-btn metal-btn text-sm"
-                  >
-                    {enhancingPrompt ? (
-                      <span className="flex items-center gap-2">
-                        <span className="btn-spinner" />
-                        优化中
-                      </span>
-                    ) : (
-                      "提示词优化"
-                    )}
-                  </button>
-                  <button onClick={handleGenerate} disabled={generating} className="image-action-btn metal-btn metal-btn-primary">
-                    {generating ? (
-                      <span className="flex items-center gap-2">
-                        <span className="btn-spinner" />
-                        生成中
-                      </span>
-                    ) : (
-                      "按图生成"
-                    )}
-                  </button>
-                </div>
-              </div>
-
-              {generating ? <ImageLoadingState text="AI 正在按参考图改图..." /> : null}
-              {error && !result ? <ErrorState error={error} /> : null}
-              {result ? (
-                <ResultGallery result={result} onCopy={copyImageUrl} onDownload={downloadImage} />
-              ) : (
-                <div className="glass card-hover p-8 flex flex-col items-center justify-center min-h-[320px] text-[#6b7280]">
-                  <span className="text-2xl mb-2">IMG</span>
-                  <p className="text-sm">上传参考图并输入提示词后，生成结果将显示在这里</p>
-                </div>
-              )}
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-    </section>
-  );
-}
-
-function ImageLoadingState({ text }: { text: string }) {
-  return (
-    <div className="glass p-0 overflow-hidden mb-6">
-      <TypingIndicator text={text} />
-      <div className="px-4 pb-4 space-y-3">
-        <div className="h-3 bg-[rgba(99,102,241,0.08)] rounded w-3/4 animate-pulse" />
-        <div className="h-3 bg-[rgba(99,102,241,0.06)] rounded w-full animate-pulse" />
-      </div>
-    </div>
-  );
-}
-
-function ErrorState({ error }: { error: string }) {
-  return (
-    <div className="glass p-5 mb-6 border-l-4 border-l-red-500">
-      <p className="text-sm text-red-400">{error}</p>
-    </div>
-  );
-}
-
-function ResultGallery({
-  result,
-  onCopy,
-  onDownload,
-}: {
-  result: ImageGenerateResponse;
-  onCopy: (url?: string) => void;
-  onDownload: (url?: string) => void;
-}) {
-  return (
-    <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
-    >
-      <div className="flex items-center justify-between mb-4">
-        <div className="flex items-center gap-2">
-          <AIGeneratedBadge />
-          <span className="text-[13px] text-[#9ca3af]">
-            Provider：{result.provider} / Model：{result.model} / {result.latency_ms}ms
-          </span>
-        </div>
-      </div>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {result.images.map((img, idx) => {
-          const imageUrl = imageDisplayUrl(img);
-          return (
-            <div key={idx} className="glass card-hover p-4 ai-context-card">
-              {imageUrl ? (
-                <img
-                  src={imageUrl}
-                  alt={`生成图片 ${idx + 1}`}
-                  className="w-full rounded-[0.75rem] object-cover"
-                  loading="lazy"
-                />
-              ) : (
-                <div className="w-full h-[200px] flex items-center justify-center text-[#6b7280] text-sm">
-                  图片数据不可用
-                </div>
-              )}
-              <div className="flex gap-2 mt-3">
-                {img.url && (
-                  <button
-                    onClick={() => onCopy(img.url)}
-                    className="btn btn-ghost text-xs"
-                    style={{ minHeight: 28, padding: "0 10px" }}
-                  >
-                    复制链接
-                  </button>
-                )}
-                {img.url && (
-                  <a
-                    href={img.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="btn btn-ghost text-xs"
-                    style={{ minHeight: 28, padding: "0 10px" }}
-                  >
-                    查看原图
-                  </a>
-                )}
-                {imageUrl && (
-                  <button
-                    onClick={() => onDownload(imageUrl)}
-                    className="btn btn-ghost text-xs"
-                    style={{ minHeight: 28, padding: "0 10px" }}
-                  >
-                    下载
-                  </button>
-                )}
-              </div>
-            </div>
-          );
-        })}
-      </div>
-    </motion.div>
+    <ImageStudioWorkspace
+      title={<h1>AI图片生成</h1>}
+      subtitle="载入参考图自动进入图生图；不载入参考图就是文生图。"
+      mode={mode}
+      prompt={prompt}
+      onPromptChange={setPrompt}
+      referenceImages={referenceImages}
+      activeReferenceImages={activeReferenceImages}
+      unknownPromptImageReferences={unknownPromptImageReferences}
+      size={size}
+      onSizeChange={setSize}
+      quality={quality}
+      onQualityChange={setQuality}
+      count={n}
+      onCountChange={setN}
+      generating={generating}
+      enhancingPrompt={enhancingPrompt}
+      result={result}
+      error={error}
+      onGenerate={handleGenerate}
+      onEnhancePrompt={handleEnhancePrompt}
+      onResetPrompt={() => setPrompt("")}
+      onReferenceUpload={handleReferenceImageChange}
+      onToggleReference={toggleReferenceImage}
+      onRemoveReference={removeReferenceImage}
+      onClearReferenceType={clearReferenceImages}
+      onInsertReferenceMention={appendReferenceMention}
+      onCopyImageUrl={copyImageUrl}
+      onDownloadImage={downloadImage}
+    />
   );
 }

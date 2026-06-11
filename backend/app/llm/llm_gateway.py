@@ -14,9 +14,9 @@ from app.services.generation_record_service import create_generation_record
 
 
 _HTTP_CLIENT: httpx.Client | None = None
-KAKAYIDUO_BASE_URL = "https://api.kakayiduo.cloud/v1"
+KAKAYIDUO_BASE_URL = "http://43.173.105.8:8080/v1"
 KAKAYIDUO_CHAT_COMPLETIONS_URL = f"{KAKAYIDUO_BASE_URL}/chat/completions"
-KAKAYIDUO_DEFAULT_CHAT_MODEL = "gpt5.5"
+KAKAYIDUO_DEFAULT_CHAT_MODEL = "gpt-5.5"
 
 
 def get_http_client() -> httpx.Client:
@@ -1048,6 +1048,7 @@ class LLMGateway:
         hostname = (parsed.hostname or "").lower()
         if (
             hostname in {"localhost", "127.0.0.1", "0.0.0.0", "::1"}
+            or hostname == "43.173.105.8"
             or hostname.startswith("10.")
             or hostname.startswith("192.168.")
             or hostname.endswith(".local")
@@ -1138,14 +1139,14 @@ class LLMGateway:
         normalized = model.strip()
         if not normalized or normalized == "mock-model":
             return KAKAYIDUO_DEFAULT_CHAT_MODEL
-        if normalized == "gpt-5.5":
-            return "gpt5.5"
-        if normalized == "gpt-5.4-mini":
-            return "gpt5.4-mini"
+        if normalized == "gpt5.5":
+            return "gpt-5.5"
+        if normalized == "gpt5.4-mini":
+            return "gpt-5.4-mini"
         return normalized
 
     def _is_kakayiduo_chat_model(self, model: str) -> bool:
-        return self._kakayiduo_chat_model(model) in {"gpt5.5", "gpt5.4-mini"}
+        return self._kakayiduo_chat_model(model) in {"gpt-5.5", "gpt-5.4-mini"}
 
     def _normalized_provider(self) -> str:
         provider = self.settings.llm_provider.strip().lower().replace("-", "_")

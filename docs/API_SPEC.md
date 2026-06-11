@@ -48,7 +48,7 @@ account_package、execution_plan、context、generation_record_id、provider、m
 
 说明：
 
-该接口只发起一次 `LLMGateway` 调用，模块名为 `strategy_bundle`，当前可使用 `kakayiduo` 渠道和 `gpt5.5` / `gpt5.4-mini` 模型；账号包装和 30 天执行计划会同时返回。
+该接口只发起一次 `LLMGateway` 调用，模块名为 `strategy_bundle`，当前可使用 `kakayiduo` 渠道和 `gpt-5.5` / `gpt-5.4-mini` 模型；账号包装和 30 天执行计划会同时返回。
 
 ## 5. 选题生成
 
@@ -179,8 +179,8 @@ GET /api/ai-chat/conversations/{conversation_id}/history
 - `moyu-pic` 已改名为 `moyu-image`，后端兼容旧名并规范化为 `moyu_image`
 - `ark-video` 已改名为 `seedance-video`，后端兼容旧名并规范化为 `seedance_video`
 - `mock` 仅用于测试流程，不走真实模型，也没有真实外部数据
-- `kakayiduo` 当前聊天端点为 `https://api.kakayiduo.cloud/v1/chat/completions`，文生图端点为 `https://api.kakayiduo.cloud/v1/images/generations`，图生图端点为 `https://api.kakayiduo.cloud/v1/images/edits`
-- `kakayiduo` chat 模型当前可选 `gpt5.5` 和 `gpt5.4-mini`
+- `kakayiduo` 当前聊天端点为 `http://43.173.105.8:8080/v1/chat/completions`，文生图端点为 `http://43.173.105.8:8080/v1/images/generations`，图生图端点为 `http://43.173.105.8:8080/v1/images/edits`
+- `kakayiduo` chat 模型当前可选 `gpt-5.5` 和 `gpt-5.4-mini`
 - `anthropic_compatible` 当前用于自用 DeepSeek API，例如 `https://api.deepseek.com/anthropic`
 
 ## 9. 当前实际使用配置
@@ -189,8 +189,8 @@ GET /api/ai-chat/conversations/{conversation_id}/history
 
 ```env
 LLM_PROVIDER=kakayiduo
-LLM_BASE_URL=https://api.kakayiduo.cloud/v1
-LLM_MODEL=gpt5.5
+LLM_BASE_URL=http://43.173.105.8:8080/v1
+LLM_MODEL=gpt-5.5
 LLM_TIMEOUT_SECONDS=180
 ACCOUNT_PACKAGE_MODEL=
 EXECUTION_PLAN_MODEL=
@@ -216,5 +216,5 @@ EXECUTION_PLAN_MODEL=
 - 账号包装、执行计划、文案生成通过 `LLMGateway` 走 `kakayiduo`
 - 出图通过图片生成服务走同一 provider，并路由到图片接口地址
 - 当前出图地址可理解为：
-  - `https://api.kakayiduo.cloud/v1/images/generations`
-  - `https://api.kakayiduo.cloud/v1/images/edits`
+  - `http://43.173.105.8:8080/v1/images/generations`
+  - `http://43.173.105.8:8080/v1/images/edits`

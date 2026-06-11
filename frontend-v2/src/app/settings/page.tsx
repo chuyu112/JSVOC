@@ -35,15 +35,16 @@ type ProviderOption = {
   modelOptionsByPurpose?: Record<string, string[]>;
 };
 
-const kakayiduoChatModels = ["gpt5.5", "gpt5.4-mini"];
+const kakayiduoChatModels = ["gpt-5.5", "gpt-5.4-mini"];
+const kakayiduoBaseUrl = "http://43.173.105.8:8080/v1";
 
 const providerOptions: ProviderOption[] = [
   {
     value: "kakayiduo",
     label: "kakayiduo",
     purposes: ["chat", "image"],
-    defaultBaseUrl: "https://api.kakayiduo.cloud/v1",
-    defaultModelByPurpose: { chat: "gpt5.5", image: "gpt-image-2" },
+    defaultBaseUrl: kakayiduoBaseUrl,
+    defaultModelByPurpose: { chat: "gpt-5.5", image: "gpt-image-2" },
     modelOptionsByPurpose: { chat: kakayiduoChatModels },
   },
   { value: "moyu_image", label: "moyu-image", purposes: ["image"], defaultModel: "gpt-image-2" },
@@ -66,9 +67,9 @@ const emptyChannelForm: LLMChannelPayload = {
   name: "",
   purpose: "chat",
   provider: "kakayiduo",
-  base_url: "https://api.kakayiduo.cloud/v1",
+  base_url: kakayiduoBaseUrl,
   api_key: "",
-  model: "gpt5.5",
+  model: "gpt-5.5",
   is_active: false,
 };
 
@@ -201,8 +202,8 @@ export default function SettingsPage() {
   function normalizeChannelModel(provider: string, purpose: string, model: string) {
     const normalizedProvider = normalizeProviderValue(provider);
     if (normalizedProvider === "kakayiduo" && purpose === "chat") {
-      if (model === "gpt-5.5") return "gpt5.5";
-      if (model === "gpt-5.4-mini") return "gpt5.4-mini";
+      if (model === "gpt5.5") return "gpt-5.5";
+      if (model === "gpt5.4-mini") return "gpt-5.4-mini";
     }
     return model;
   }
