@@ -33,6 +33,51 @@ def generate_video(
     db: Session | None = None,
 ) -> dict[str, Any]:
     settings = llm_channel_service.get_effective_video_settings(db, get_settings()) if db is not None else get_settings()
+    if is_dianli_provider(settings):
+        return generate_video_dianli(
+            settings,
+            prompt,
+            options=options,
+            first_frame=first_frame,
+            last_frame=last_frame,
+            reference_media=reference_media,
+            reference_medias=reference_medias,
+            reference_images=reference_images,
+            reference_videos=reference_videos,
+            reference_audios=reference_audios,
+            reference_image_names=reference_image_names,
+            on_provider_task_created=on_provider_task_created,
+        )
+    return generate_video_seedance(
+        settings,
+        prompt,
+        options=options,
+        first_frame=first_frame,
+        last_frame=last_frame,
+        reference_media=reference_media,
+        reference_medias=reference_medias,
+        reference_images=reference_images,
+        reference_videos=reference_videos,
+        reference_audios=reference_audios,
+        reference_image_names=reference_image_names,
+        on_provider_task_created=on_provider_task_created,
+    )
+
+
+def generate_video_seedance(
+    settings: Settings,
+    prompt: str,
+    options: dict[str, Any] | None = None,
+    first_frame: str | None = None,
+    last_frame: str | None = None,
+    reference_media: str | None = None,
+    reference_medias: list[str] | None = None,
+    reference_images: list[str] | None = None,
+    reference_videos: list[str] | None = None,
+    reference_audios: list[str] | None = None,
+    reference_image_names: list[str] | None = None,
+    on_provider_task_created: Callable[[dict[str, Any]], None] | None = None,
+) -> dict[str, Any]:
     started_at = time.perf_counter()
     provider = video_provider(settings)
     base_url = video_base_url(settings)
@@ -143,6 +188,168 @@ def generate_video(
     }
 
 
+def generate_video_dianli(
+    settings: Settings,
+    prompt: str,
+    options: dict[str, Any] | None = None,
+    first_frame: str | None = None,
+    last_frame: str | None = None,
+    reference_media: str | None = None,
+    reference_medias: list[str] | None = None,
+    reference_images: list[str] | None = None,
+    reference_videos: list[str] | None = None,
+    reference_audios: list[str] | None = None,
+    reference_image_names: list[str] | None = None,
+    on_provider_task_created: Callable[[dict[str, Any]], None] | None = None,
+) -> dict[str, Any]:
+    started_at = time.perf_counter()
+    provider = video_provider(settings)
+    base_url = video_base_url(settings)
+    api_key = video_api_key(settings)
+    if not api_key:
+        raise ValueError("VIDEO_GENERATION_API_KEY is required for video generation")
+
+    model = resolve_video_model_endpoint(
+        str((options or {}).get("model") or ""),
+        settings,
+    )
+    model = _normalize_dianli_model(model, has_reference_video=bool(reference_videos))
+
+    headers = {"Content-Type": "application/json"}
+    if api_key:
+        headers["Authorization"] = f"Bearer {api_key}"
+
+    endpoint = f"{base_url.rstrip('/')}/v1/video/generations"
+
+    prompt = build_video_reference_prompt(
+        prompt,
+        reference_image_names=reference_image_names,
+        reference_images=reference_images,
+    )
+
+    content: list[dict[str, Any]] = [{"type": "text", "text": prompt}]
+    if first_frame:
+        content.append({"type": "image_url", "image_url": {"url": first_frame}, "role": "first_frame"})
+    if reference_media:
+        content.append({"type": "image_url", "image_url": {"url": reference_media}, "role": "reference_image"})
+    if reference_medias:
+        for url in reference_medias:
+            content.append({"type": "image_url", "image_url": {"url": url}, "role": "reference_image"})
+    if reference_images:
+        for url in reference_images:
+            content.append({"type": "image_url", "image_url": {"url": url}, "role": "reference_image"})
+    if reference_videos:
+        for url in reference_videos:
+            content.append({"type": "video_url", "video_url": {"url": url}, "role": "reference_video"})
+    if reference_audios:
+        for url in reference_audios:
+            content.append({"type": "audio_url", "audio_url": {"url": url}, "role": "reference_audio"})
+    if last_frame:
+        content.append({"type": "image_url", "image_url": {"url": last_frame}, "role": "last_frame"})
+
+    metadata: dict[str, Any] = {"content": content}
+    if options:
+        for k, v in options.items():
+            if k in ("first_frame", "last_frame", "reference_media", "reference_medias", "reference_images", "reference_videos", "reference_audios", "mode", "count", "timeout_hours", "advanced_open", "web_search", "model"):
+                continue
+            if k == "with_sound":
+                metadata["generate_audio"] = v
+            elif k == "duration_seconds" and options.get("duration_mode") == "seconds":
+                metadata["duration"] = v
+            elif k == "duration_mode":
+                continue
+            else:
+                metadata[k] = v
+    if "watermark" not in metadata:
+        metadata["watermark"] = False
+
+    request_body = {
+        "model": model,
+        "prompt": prompt,
+        "metadata": metadata,
+    }
+
+    response = post_video_request_with_retry(
+        endpoint,
+        headers=headers,
+        json=request_body,
+        timeout=float(settings.video_generation_timeout_seconds),
+    )
+    response.raise_for_status()
+    body = response.json()
+
+    task_id = body.get("task_id") or body.get("id")
+    if not task_id:
+        return {
+            "provider": provider,
+            "model": model,
+            "video_url": None,
+            "task_id": None,
+            "status": "unknown",
+            "latency_ms": elapsed_ms(started_at),
+            "raw_response": body,
+        }
+
+    if on_provider_task_created is not None:
+        on_provider_task_created(
+            {
+                "provider": provider,
+                "model": model,
+                "task_id": task_id,
+                "status": "submitted",
+                "raw_response": body,
+                "latency_ms": elapsed_ms(started_at),
+            }
+        )
+
+    result = poll_video_task_dianli(base_url, api_key, task_id, started_at, max_seconds=VIDEO_MAX_POLL_SECONDS)
+    return {
+        "provider": provider,
+        "model": model,
+        "video_url": result.get("video_url"),
+        "task_id": task_id,
+        "status": result.get("status", "unknown"),
+        "latency_ms": elapsed_ms(started_at),
+        "raw_response": result.get("raw_response"),
+    }
+
+
+def poll_video_task_dianli(
+    base_url: str,
+    api_key: str,
+    task_id: str,
+    started_at: float,
+    max_seconds: float = VIDEO_MAX_POLL_SECONDS,
+) -> dict[str, Any]:
+    headers = {}
+    if api_key:
+        headers["Authorization"] = f"Bearer {api_key}"
+
+    endpoint = f"{base_url.rstrip('/')}/v1/videos/{task_id}"
+    deadline = time.perf_counter() + max_seconds
+
+    while time.perf_counter() < deadline:
+        resp = httpx.get(endpoint, headers=headers, timeout=60.0)
+        resp.raise_for_status()
+        body = resp.json()
+
+        status = _extract_dianli_task_status(body)
+        if status in ("succeeded", "completed", "success"):
+            video_url = _extract_dianli_video_url(body)
+            return {"status": status, "video_url": video_url, "raw_response": body}
+        if status in ("failed", "error", "cancelled"):
+            error_msg = _extract_dianli_error_message(body)
+            raise RuntimeError(f"video generation task failed: {error_msg}")
+
+        remaining = deadline - time.perf_counter()
+        if remaining <= 0:
+            break
+        sleep_time = min(VIDEO_POLL_INTERVAL_SECONDS, remaining)
+        time.sleep(sleep_time)
+
+    raise TimeoutError("video generation task polling timed out")
+
+
 def build_video_reference_prompt(
     prompt: str,
     *,
@@ -222,6 +429,12 @@ def get_video_task_result(task_id: str, db: Session | None = None) -> dict[str, 
     api_key = video_api_key(settings)
     if not api_key:
         raise ValueError("VIDEO_GENERATION_API_KEY or ARK_API_KEY is required for video generation")
+    if is_dianli_provider(settings):
+        return get_video_task_result_dianli(base_url, api_key, task_id)
+    return get_video_task_result_seedance(base_url, api_key, task_id)
+
+
+def get_video_task_result_seedance(base_url: str, api_key: str, task_id: str) -> dict[str, Any]:
     headers = {}
     if api_key:
         headers["Authorization"] = f"Bearer {api_key}"
@@ -242,6 +455,35 @@ def get_video_task_result(task_id: str, db: Session | None = None) -> dict[str, 
         return {
             "status": status,
             "error_message": _extract_error_message(body),
+            "raw_response": body,
+        }
+    return {
+        "status": status or "running",
+        "raw_response": body,
+    }
+
+
+def get_video_task_result_dianli(base_url: str, api_key: str, task_id: str) -> dict[str, Any]:
+    headers = {}
+    if api_key:
+        headers["Authorization"] = f"Bearer {api_key}"
+
+    endpoint = f"{base_url.rstrip('/')}/v1/videos/{task_id}"
+    resp = httpx.get(endpoint, headers=headers, timeout=60.0)
+    resp.raise_for_status()
+    body = resp.json()
+
+    status = _extract_dianli_task_status(body)
+    if status in ("succeeded", "completed", "success"):
+        return {
+            "status": status,
+            "video_url": _extract_dianli_video_url(body),
+            "raw_response": body,
+        }
+    if status in ("failed", "error", "cancelled"):
+        return {
+            "status": status,
+            "error_message": _extract_dianli_error_message(body),
             "raw_response": body,
         }
     return {
@@ -305,7 +547,13 @@ def video_provider(settings: Settings) -> str:
     provider = settings.llm_provider.strip().lower().replace("-", "_")
     if provider in {"seedance_video", "ark_video"}:
         return "seedance_video"
+    if provider in {"dianli", "dianli_video", "dianliciyuan", "ant", "ant_video"}:
+        return "dianli"
     return "seedance"
+
+
+def is_dianli_provider(settings: Settings) -> bool:
+    return video_provider(settings) == "dianli"
 
 
 def video_api_key(settings: Settings) -> str:
@@ -323,6 +571,45 @@ def strip_url_method_prefix(value: str) -> str:
 def _extract_task_status(body: dict[str, Any]) -> str:
     status = body.get("status") or body.get("task_status") or body.get("state") or ""
     return str(status).lower().strip()
+
+
+def _normalize_dianli_model(model: str, *, has_reference_video: bool) -> str:
+    model = model.strip()
+    t2v_standard = "ant-2-text-2-video"
+    t2v_fast = "ant-2-fast-text-2-video"
+    v2v_standard = "ant-2-video-2-video"
+    v2v_fast = "ant-2-fast-video-2-video"
+
+    if model in {v2v_standard, v2v_fast}:
+        return model
+    if model in {t2v_standard, t2v_fast}:
+        if has_reference_video:
+            return v2v_standard if model == t2v_standard else v2v_fast
+        return model
+    if has_reference_video:
+        return v2v_standard
+    return t2v_standard
+
+
+def _extract_dianli_task_status(body: dict[str, Any]) -> str:
+    status = body.get("status") or body.get("task_status") or body.get("state") or ""
+    return str(status).lower().strip()
+
+
+def _extract_dianli_video_url(body: dict[str, Any]) -> str | None:
+    metadata = body.get("metadata") or {}
+    if isinstance(metadata, dict):
+        url = metadata.get("url")
+        if url:
+            return str(url)
+    return body.get("video_url") or body.get("url") or None
+
+
+def _extract_dianli_error_message(body: dict[str, Any]) -> str:
+    error = body.get("error") or body.get("message") or body.get("reason") or ""
+    if isinstance(error, dict):
+        return str(error.get("message") or error.get("reason") or "")
+    return str(error) or "unknown error"
 
 
 def _extract_video_url(body: dict[str, Any]) -> str | None:

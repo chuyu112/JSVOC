@@ -49,6 +49,7 @@ const providerOptions: ProviderOption[] = [
   },
   { value: "moyu_image", label: "moyu-image", purposes: ["image"], defaultModel: "gpt-image-2" },
   { value: "seedance_video", label: "seedance-video", purposes: ["video"], defaultModel: "seedance-2.0" },
+  { value: "dianli", label: "点力视频 (Dianli)", purposes: ["video"], defaultModel: "ant-2-text-2-video", defaultBaseUrl: "https://www.dianliciyuan.com" },
   { value: "mock", label: "Mock", purposes: ["chat"] },
   { value: "openai_compatible", label: "OpenAI Compatible", purposes: ["chat", "image"] },
   { value: "dataeye", label: "DataEye", purposes: ["chat"] },
