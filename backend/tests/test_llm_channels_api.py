@@ -9,6 +9,8 @@ from sqlalchemy.pool import StaticPool
 from app.db.base import Base
 from app.db.session import get_db
 from app.main import app
+from app.models.auth_account import AuthAccount
+from app.models.user import User
 
 
 class LLMChannelsApiTest(unittest.TestCase):
@@ -48,6 +50,16 @@ class LLMChannelsApiTest(unittest.TestCase):
         )
         self.assertEqual(response.status_code, 201)
 
+    def make_admin(self, username: str) -> None:
+        with self.SessionLocal() as db:
+            account = db.query(AuthAccount).filter_by(
+                provider_type="username",
+                provider_key=username,
+            ).one()
+            user = db.get(User, account.user_id)
+            user.is_admin = True
+            db.commit()
+
     def test_non_admin_cannot_manage_llm_channels(self) -> None:
         self.register("normaluser")
 
@@ -55,8 +67,18 @@ class LLMChannelsApiTest(unittest.TestCase):
 
         self.assertEqual(response.status_code, 403)
 
+    def test_default_admin_username_does_not_grant_admin_access(self) -> None:
+        # Only built-in super-admin usernames (e.g. chuyu111) are granted access
+        # automatically; a username that merely looks like an admin does not.
+        self.register("regularadmin")
+
+        response = self.client.get("/api/admin/llm-channels")
+
+        self.assertEqual(response.status_code, 403)
+
     def test_admin_can_manage_channels_without_exposing_api_key(self) -> None:
         self.register("chuyu111")
+        self.make_admin("chuyu111")
 
         empty_response = self.client.get("/api/admin/llm-channels")
         self.assertEqual(empty_response.status_code, 200)
@@ -125,6 +147,7 @@ class LLMChannelsApiTest(unittest.TestCase):
 
     def test_active_channels_are_isolated_by_purpose(self) -> None:
         self.register("chuyu111")
+        self.make_admin("chuyu111")
 
         chat_response = self.client.post(
             "/api/admin/llm-channels",
@@ -183,6 +206,7 @@ class LLMChannelsApiTest(unittest.TestCase):
 
     def test_active_channel_overrides_env_settings_for_gateway_and_preserves_secret(self) -> None:
         self.register("chuyu111")
+        self.make_admin("chuyu111")
         create_response = self.client.post(
             "/api/admin/llm-channels",
             json={
@@ -312,6 +336,7 @@ class LLMChannelsApiTest(unittest.TestCase):
 
     def test_image_channel_test_uses_image_generation_endpoint(self) -> None:
         self.register("chuyu111")
+        self.make_admin("chuyu111")
         create_response = self.client.post(
             "/api/admin/llm-channels",
             json={
@@ -391,6 +416,7 @@ class LLMChannelsApiTest(unittest.TestCase):
 
     def test_video_channel_test_checks_config_without_submitting_task(self) -> None:
         self.register("chuyu111")
+        self.make_admin("chuyu111")
         create_response = self.client.post(
             "/api/admin/llm-channels",
             json={

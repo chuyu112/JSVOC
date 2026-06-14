@@ -2,6 +2,9 @@ from app.models.account_strategy_context import AccountStrategyContext
 from app.models.auth_account import AuthAccount
 from app.models.credit import CreditAccount, CreditTransaction
 from app.models.digital_asset import DigitalAsset
+from app.models.digital_human_avatar import DigitalHumanAvatar
+from app.models.digital_human_video import DigitalHumanVideo
+from app.models.digital_human_voice import DigitalHumanVoice
 from app.models.generation_record import GenerationRecord
 from app.models.generation_task import GenerationTask
 from app.models.hot_copy import HotCopyMaterial, HotCopyRewrite
@@ -18,6 +21,9 @@ __all__ = [
     "CreditAccount",
     "CreditTransaction",
     "DigitalAsset",
+    "DigitalHumanAvatar",
+    "DigitalHumanVideo",
+    "DigitalHumanVoice",
     "GenerationRecord",
     "GenerationTask",
     "HotCopyMaterial",

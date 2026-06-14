@@ -10,7 +10,7 @@ DEFAULT_DEV_AUTH_SECRET = "jsvoc-dev-secret"
 class Settings(BaseSettings):
     database_url: str = Field(default="sqlite:///./jsvoc_dev.db", alias="DATABASE_URL")
     api_cors_origins: str = Field(
-        default="http://localhost:5173,http://127.0.0.1:5173",
+        default="http://localhost:5173,http://127.0.0.1:5173,http://localhost:3000,https://JSVOC.jadejinyuxuan.com",
         alias="API_CORS_ORIGINS",
     )
     llm_provider: str = Field(default="mock", alias="LLM_PROVIDER")
@@ -67,6 +67,16 @@ class Settings(BaseSettings):
     video_parser_api_key: str = Field(default="", alias="VIDEO_PARSER_API_KEY")
     asr_api_url: str = Field(default="", alias="ASR_API_URL")
     asr_api_key: str = Field(default="", alias="ASR_API_KEY")
+    asr_model_size: str = Field(default="medium", alias="ASR_MODEL_SIZE")
+    asr_device: str = Field(default="auto", alias="ASR_DEVICE")
+    asr_compute_type: str = Field(default="default", alias="ASR_COMPUTE_TYPE")
+
+    # Digital human services (local)
+    cozy_voice_url: str = Field(default="http://127.0.0.1:50000", alias="COZY_VOICE_URL")
+    hey_gem_url: str = Field(default="http://127.0.0.1:3000", alias="HEY_GEM_URL")
+
+    # Douyin video parser (local Douyin_TikTok_Download_API)
+    douyin_api_url: str = Field(default="http://127.0.0.1:80", alias="DOUYIN_API_URL")
 
     model_config = SettingsConfigDict(
         env_file=("../.env.example", "../.env", ".env"),

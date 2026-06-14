@@ -1,0 +1,17 @@
+# frp 服务端配置 (部署在 8.152.2.222)
+bindPort = 7000
+
+# 认证 token，客户端需要相同 token 才能连接
+auth.method = "token"
+auth.token = "jsvoc-frp-token-2026"
+
+# Web 监控面板（可选）
+webServer.addr = "0.0.0.0"
+webServer.port = 7500
+webServer.user = "admin"
+webServer.password = "jsvoc-admin-2026"
+
+# 允许代理的端口范围
+allowPorts = [
+  { start = 8000, end = 8010 }
+]

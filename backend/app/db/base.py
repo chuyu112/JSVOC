@@ -12,6 +12,9 @@ def init_db() -> None:
     from app.models import auth_account  # noqa: F401
     from app.models import credit  # noqa: F401
     from app.models import digital_asset  # noqa: F401
+    from app.models import digital_human_avatar  # noqa: F401
+    from app.models import digital_human_video  # noqa: F401
+    from app.models import digital_human_voice  # noqa: F401
     from app.models import generation_record  # noqa: F401
     from app.models import generation_task  # noqa: F401
     from app.models import hot_copy  # noqa: F401

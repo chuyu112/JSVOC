@@ -137,7 +137,31 @@ def parse_video_link(url: str, settings: Settings | None = None) -> VideoParseRe
         return _parse_via_external_api(url, platform, settings)
 
     if platform == "douyin":
-        return _parse_douyin_link(url)
+        # Try direct parsing first, fallback to Douyin_TikTok_Download_API
+        try:
+            return _parse_douyin_link(url)
+        except RuntimeError:
+            logger.info("Direct Douyin parse failed, trying Douyin_TikTok_Download_API")
+            try:
+                from app.services.douyin_api_client import DouyinAPIClient
+                client = DouyinAPIClient(settings.douyin_api_url)
+                data = client.parse_video(url)
+                return VideoParseResult(
+                    title=data.get("title", "未识别标题")[:200],
+                    original_script=data.get("title", ""),
+                    account_name=data.get("author", None),
+                    cover_url=data.get("cover", None),
+                    platform="douyin",
+                    source_url=url,
+                )
+            except Exception as exc:
+                logger.warning("DouyinAPI fallback also failed: %s", exc)
+                raise RuntimeError(
+                    "抖音链接解析失败。请:\n"
+                    "1. 确认链接正确\n"
+                    "2. 运行 deploy_douyin_api.bat 部署解析服务\n"
+                    "3. 或使用本地上传功能"
+                ) from exc
     if platform == "xiaohongshu":
         return _parse_xiaohongshu_link(url)
 
