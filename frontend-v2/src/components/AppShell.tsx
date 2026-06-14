@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 import { useAuth } from "./AuthProvider";
 import { getCreditBalance } from "@/lib/api/credits";
 import { listGenerationTasks, type GenerationTaskSummary } from "@/lib/api/generationTasks";
+import { formatCompactBeijingTime } from "@/lib/time";
 // ThemeSwitcher moved to /settings page
 
 const globalNavItems = [
@@ -212,6 +213,9 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
               <span className="shrink-0 text-red-200/90">
                 {taskTypeLabel(visibleFailedTask.task_type)} #{visibleFailedTask.id}
               </span>
+              <span className="shrink-0 text-red-200/70">
+                {formatCompactBeijingTime(visibleFailedTask.created_at)}
+              </span>
               <span
                 className="min-w-0 truncate text-red-100/90"
                 title={cleanGenerationError(visibleFailedTask.error_message)}
@@ -232,58 +236,19 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       )}
 
       {!isLoginPage && showPrivateShell && (
-        <>
-          <details className="mobile-side-drawer mobile-side-drawer-left md:hidden">
-            <summary className="mobile-side-trigger" aria-label="打开导航">
-              导航
-            </summary>
-            <nav className="mobile-side-sheet">
-              {globalNavItems.map((item) => (
-                <Link
-                  key={item.to}
-                  href={item.to}
-                  className={`mobile-side-link ${
-                    isNavItemActive(pathname, item) ? "mobile-side-link-active" : ""
-                  }`}
-                >
-                  {item.label}
-                </Link>
-              ))}
-            </nav>
-          </details>
-
-          <details className="mobile-side-drawer mobile-side-drawer-right md:hidden">
-            <summary className="mobile-side-trigger" aria-label="打开账户">
-              账户
-            </summary>
-            <div className="mobile-side-sheet">
-              <div className="mobile-account-card">
-                <span>{auth.displayName}</span>
-                <strong>{creditBalance ?? auth.user?.credit_balance ?? 0} 积分</strong>
-              </div>
-              <Link
-                href={settingsHref}
-                className={`mobile-side-link ${pathname === "/settings" ? "mobile-side-link-active" : ""}`}
-              >
-                用户设置
-              </Link>
-            </div>
-          </details>
-
-          <nav className="mobile-bottom-nav md:hidden" aria-label="底部导航">
-            {globalNavItems.map((item) => (
-              <Link
-                key={item.to}
-                href={item.to}
-                className={`mobile-bottom-link ${
-                  isNavItemActive(pathname, item) ? "mobile-bottom-link-active" : ""
-                }`}
-              >
-                {item.mobileLabel}
-              </Link>
-            ))}
-          </nav>
-        </>
+        <nav className="mobile-bottom-nav md:hidden" aria-label="底部导航">
+          {globalNavItems.map((item) => (
+            <Link
+              key={item.to}
+              href={item.to}
+              className={`mobile-bottom-link ${
+                isNavItemActive(pathname, item) ? "mobile-bottom-link-active" : ""
+              }`}
+            >
+              {item.mobileLabel}
+            </Link>
+          ))}
+        </nav>
       )}
 
       <main className="app-main flex-1">{children}</main>

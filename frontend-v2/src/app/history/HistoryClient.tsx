@@ -8,6 +8,7 @@ import {
   formatModuleName,
   type GenerationRecord,
 } from "@/lib/api/generationRecords";
+import { formatBeijingTime, formatCompactBeijingTime } from "@/lib/time";
 
 const moduleOptions = [
   { label: "全部模块", value: "" },
@@ -22,20 +23,6 @@ const moduleOptions = [
   { label: "生视频", value: "video_generate" },
   { label: "AI聊天", value: "ai_chat" },
 ];
-
-function formatTime(value: string) {
-  return new Date(value).toLocaleString();
-}
-
-function formatCompactTime(value: string) {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "-";
-  const month = date.getMonth() + 1;
-  const day = date.getDate();
-  const hours = String(date.getHours()).padStart(2, "0");
-  const minutes = String(date.getMinutes()).padStart(2, "0");
-  return `${month}/${day} ${hours}:${minutes}`;
-}
 
 function formatLatencySeconds(value: number | null | undefined) {
   if (typeof value !== "number" || !Number.isFinite(value)) return "-";
@@ -186,7 +173,7 @@ export default function HistoryClient({ projectId }: { projectId?: number }) {
         </div>
         <div className="overview-item">
           <span>最近</span>
-          <strong>{records[0] ? formatCompactTime(records[0].created_at) : "-"}</strong>
+          <strong>{records[0] ? formatCompactBeijingTime(records[0].created_at) : "-"}</strong>
         </div>
       </motion.div>
 
@@ -280,8 +267,8 @@ export default function HistoryClient({ projectId }: { projectId?: number }) {
                         {failureReason(record)}
                       </td>
                       <td className="px-4 py-3 text-[#b0b0b0]">{formatLatencySeconds(record.latency_ms)}</td>
-                      <td className="px-4 py-3 text-[#b0b0b0]" title={formatTime(record.created_at)}>
-                        {formatCompactTime(record.created_at)}
+                      <td className="px-4 py-3 text-[#b0b0b0]" title={formatBeijingTime(record.created_at)}>
+                        {formatCompactBeijingTime(record.created_at)}
                       </td>
                       <td className="px-4 py-3">
                         <span className="text-[#5a9b82] text-xs">

@@ -11,6 +11,7 @@ import {
 } from "@/lib/api/generationRecords";
 import { getProject, type Project } from "@/lib/api/projects";
 import ProjectModuleTitle from "@/components/ProjectModuleTitle";
+import { formatBeijingTime } from "@/lib/time";
 
 export default function AccountPackagePage() {
   const router = useRouter();
@@ -336,7 +337,7 @@ export default function AccountPackagePage() {
           transition={{ delay: 0.5 }}
           className="text-[11px] text-[#9ca3af] mt-6 text-right"
         >
-          生成于 {new Date(accountPackage.created_at).toLocaleString("zh-CN")}
+          生成于 {formatBeijingTime(accountPackage.created_at)}
         </motion.p>
       )}
     </section>

@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { getProject, updateProject, type Project, type ProjectPayload } from "@/lib/api/projects";
 import { getLatestAccountPackage, generateAccountPackage, type AccountPackage } from "@/lib/api/generationRecords";
+import { formatBeijingDate } from "@/lib/time";
 
 const workflowNavGroups = [
   {
@@ -372,7 +373,7 @@ export default function ProjectDetailClient({ projectId }: { projectId: number }
               <h2 className="text-[15px] font-bold text-[#f5f5f5]">账号包装</h2>
               {accountPackage?.created_at && (
                 <span className="text-[11px] text-[#9ca3af]">
-                  {new Date(accountPackage.created_at).toLocaleDateString("zh-CN")}
+                  {formatBeijingDate(accountPackage.created_at)}
                 </span>
               )}
             </div>

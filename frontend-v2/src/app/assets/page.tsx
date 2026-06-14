@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { listDigitalAssets, type DigitalAsset, type DigitalAssetType } from "@/lib/api/digitalAssets";
 import { useAuth } from "@/components/AuthProvider";
+import { formatBeijingTime } from "@/lib/time";
 
 const typeOptions: Array<{ label: string; value: DigitalAssetType | "" }> = [
   { label: "全部资产", value: "" },
@@ -27,10 +28,6 @@ function projectName(asset: DigitalAsset) {
 function ownershipLabel(asset: DigitalAsset, displayName: string) {
   if (asset.source_project_id == null) return displayName;
   return `${displayName}--${projectName(asset)}`;
-}
-
-function formatTime(value: string) {
-  return new Date(value).toLocaleString();
 }
 
 function assetPrompt(asset: DigitalAsset) {
@@ -175,7 +172,7 @@ export default function AssetsPage() {
                 <span className={`tag ${asset.asset_type === "image" ? "tag-success" : asset.asset_type === "video" ? "tag-warning" : "tag-info"}`}>
                   {formatAssetType(asset.asset_type)}
                 </span>
-                <span className="text-[12px] text-[#6b7280]">{formatTime(asset.created_at)}</span>
+                <span className="text-[12px] text-[#6b7280]">{formatBeijingTime(asset.created_at)}</span>
               </div>
 
               {asset.asset_type === "image" && asset.access_url ? (

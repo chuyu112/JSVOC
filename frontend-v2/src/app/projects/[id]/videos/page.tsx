@@ -12,6 +12,7 @@ import { listProjectTopics, type Topic } from "@/lib/api/topics";
 import { listDigitalAssets, type DigitalAsset } from "@/lib/api/digitalAssets";
 import { api } from "@/lib/api/client";
 import ProjectModuleTitle from "@/components/ProjectModuleTitle";
+import { formatBeijingTime } from "@/lib/time";
 
 interface TaskStatus {
   id: number;
@@ -1701,7 +1702,7 @@ export default function VideosPage() {
                     </div>
                   ) : null}
                   <p className="text-[11px] text-[#9ca3af]">
-                    {new Date(asset.created_at + "Z").toLocaleString("zh-CN", { timeZone: "Asia/Shanghai" })}
+                    {formatBeijingTime(asset.created_at)}
                   </p>
                   {asset.access_url && (
                     <div className="flex gap-2 pt-1">
