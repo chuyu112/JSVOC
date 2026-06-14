@@ -8,6 +8,11 @@ from app.core.config import Settings, get_settings
 SEEDANCE_2_KEY = "seedance-2.0"
 SEEDANCE_2_FAST_KEY = "seedance-2.0-fast"
 
+DIANLI_TEXT_2_VIDEO_KEY = "ant-2-text-2-video"
+DIANLI_FAST_TEXT_2_VIDEO_KEY = "ant-2-fast-text-2-video"
+DIANLI_VIDEO_2_VIDEO_KEY = "ant-2-video-2-video"
+DIANLI_FAST_VIDEO_2_VIDEO_KEY = "ant-2-fast-video-2-video"
+
 DEFAULT_SEEDANCE_2_ENDPOINT = "doubao-seedance-2-0-260128"
 DEFAULT_SEEDANCE_2_FAST_ENDPOINT = "doubao-seedance-2-0-fast-260128"
 
@@ -51,13 +56,60 @@ def video_model_catalog(settings: Settings | None = None) -> list[VideoModelSpec
             available=SEEDANCE_2_FAST_KEY in enabled,
             disabled_reason=None if SEEDANCE_2_FAST_KEY in enabled else "当前账号未启用 Seedance 2.0 Fast endpoint",
         ),
+        VideoModelSpec(
+            key=DIANLI_TEXT_2_VIDEO_KEY,
+            label="点力 文生视频",
+            value=DIANLI_TEXT_2_VIDEO_KEY,
+            kind="standard",
+            resolutions=("480p", "720p", "1080p"),
+            pricing_yuan_per_second={"480p": 7 / 15, "720p": 1.0, "1080p": 37 / 15},
+            available=DIANLI_TEXT_2_VIDEO_KEY in enabled,
+            disabled_reason=None if DIANLI_TEXT_2_VIDEO_KEY in enabled else "当前账号未启用点力文生视频",
+        ),
+        VideoModelSpec(
+            key=DIANLI_FAST_TEXT_2_VIDEO_KEY,
+            label="点力 文生视频 Fast",
+            value=DIANLI_FAST_TEXT_2_VIDEO_KEY,
+            kind="fast",
+            resolutions=("480p", "720p"),
+            pricing_yuan_per_second={"480p": 5.6 / 15, "720p": 0.8},
+            available=DIANLI_FAST_TEXT_2_VIDEO_KEY in enabled,
+            disabled_reason=None if DIANLI_FAST_TEXT_2_VIDEO_KEY in enabled else "当前账号未启用点力文生视频 Fast",
+        ),
+        VideoModelSpec(
+            key=DIANLI_VIDEO_2_VIDEO_KEY,
+            label="点力 图/视频生视频",
+            value=DIANLI_VIDEO_2_VIDEO_KEY,
+            kind="standard",
+            resolutions=("480p", "720p", "1080p"),
+            pricing_yuan_per_second={"480p": 7 / 15, "720p": 1.0, "1080p": 37 / 15},
+            available=DIANLI_VIDEO_2_VIDEO_KEY in enabled,
+            disabled_reason=None if DIANLI_VIDEO_2_VIDEO_KEY in enabled else "当前账号未启用点力图/视频生视频",
+        ),
+        VideoModelSpec(
+            key=DIANLI_FAST_VIDEO_2_VIDEO_KEY,
+            label="点力 图/视频生视频 Fast",
+            value=DIANLI_FAST_VIDEO_2_VIDEO_KEY,
+            kind="fast",
+            resolutions=("480p", "720p"),
+            pricing_yuan_per_second={"480p": 5.6 / 15, "720p": 0.8},
+            available=DIANLI_FAST_VIDEO_2_VIDEO_KEY in enabled,
+            disabled_reason=None if DIANLI_FAST_VIDEO_2_VIDEO_KEY in enabled else "当前账号未启用点力图/视频生视频 Fast",
+        ),
     ]
 
 
 def enabled_video_model_keys(settings: Settings) -> set[str]:
     configured = settings.video_generation_enabled_models.strip()
     if not configured:
-        return {SEEDANCE_2_KEY, SEEDANCE_2_FAST_KEY}
+        return {
+            SEEDANCE_2_KEY,
+            SEEDANCE_2_FAST_KEY,
+            DIANLI_TEXT_2_VIDEO_KEY,
+            DIANLI_FAST_TEXT_2_VIDEO_KEY,
+            DIANLI_VIDEO_2_VIDEO_KEY,
+            DIANLI_FAST_VIDEO_2_VIDEO_KEY,
+        }
     return {item.strip() for item in configured.split(",") if item.strip()}
 
 
@@ -89,7 +141,7 @@ def video_model_availability(value: str | None, settings: Settings | None = None
         if requested in {spec.key, spec.value}:
             return spec.available, spec.disabled_reason
 
-    return False, "不支持的视频模型，请使用 Seedance 2.0 或 Seedance 2.0 Fast"
+    return False, "不支持的视频模型"
 
 
 def video_model_pricing(value: str | None, settings: Settings | None = None) -> dict[str, float] | None:
