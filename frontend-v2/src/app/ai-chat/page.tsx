@@ -2,7 +2,7 @@
 
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { motion } from "framer-motion";
-import { ChatCircleText, GlobeHemisphereEast, PaperPlaneTilt, PlusCircle } from "@phosphor-icons/react";
+import { ChatCircleText, ClockCounterClockwise, GlobeHemisphereEast, PaperPlaneTilt, PlusCircle } from "@phosphor-icons/react";
 import {
   listAIChatConversationHistory,
   listAIChatConversations,
@@ -11,6 +11,7 @@ import {
   type AIChatHistoryTurn,
   type AIChatMessage,
 } from "@/lib/api/aiChat";
+import { formatBeijingTime, formatCompactBeijingTime } from "@/lib/time";
 
 interface LocalMessage extends AIChatMessage {
   id: string;
@@ -36,12 +37,8 @@ function newMessage(role: AIChatMessage["role"], content: string, extra: Partial
 }
 
 function formatHistoryMeta(turn: AIChatHistoryTurn) {
-  const created = new Date(turn.created_at);
-  const timeText = Number.isNaN(created.getTime())
-    ? ""
-    : `${created.getMonth() + 1}/${created.getDate()} ${String(created.getHours()).padStart(2, "0")}:${String(created.getMinutes()).padStart(2, "0")}`;
   const latencyText = typeof turn.latency_ms === "number" ? ` / ${turn.latency_ms}ms` : "";
-  return `${turn.web_search ? "联网搜索 / " : ""}${turn.provider} / ${turn.model}${latencyText}${timeText ? ` / ${timeText}` : ""}`;
+  return `${turn.web_search ? "联网搜索 / " : ""}${turn.provider} / ${turn.model}${latencyText} / ${formatCompactBeijingTime(turn.created_at)}`;
 }
 
 function messagesFromHistory(turns: AIChatHistoryTurn[]): LocalMessage[] {
@@ -68,13 +65,7 @@ function createConversationId() {
 }
 
 function formatConversationTime(value: string) {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "";
-  const month = date.getMonth() + 1;
-  const day = date.getDate();
-  const hours = String(date.getHours()).padStart(2, "0");
-  const minutes = String(date.getMinutes()).padStart(2, "0");
-  return `${month}/${day} ${hours}:${minutes}`;
+  return formatCompactBeijingTime(value);
 }
 
 export default function AIChatPage() {
@@ -87,6 +78,7 @@ export default function AIChatPage() {
   const [webSearch, setWebSearch] = useState(false);
   const [loadingConversations, setLoadingConversations] = useState(false);
   const [loadingMessages, setLoadingMessages] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
   const streamRef = useRef<HTMLDivElement>(null);
 
   const canSend = input.trim().length > 0 && !sending;
@@ -214,7 +206,11 @@ export default function AIChatPage() {
       </motion.div>
 
       <div className="ai-chat-workspace">
-        <aside className="ai-chat-sidebar glass">
+        <aside
+          className={`ai-chat-sidebar glass ${
+            historyOpen ? "ai-chat-sidebar-open" : "ai-chat-sidebar-collapsed"
+          }`}
+        >
           <div className="ai-chat-sidebar-header">
             <div>
               <p>聊天历史</p>
@@ -313,6 +309,15 @@ export default function AIChatPage() {
             }}
           />
           <div className="ai-chat-actions">
+            <button
+              type="button"
+              onClick={() => setHistoryOpen((current) => !current)}
+              className={`metal-btn ai-chat-action ${historyOpen ? "ai-chat-search-active" : ""}`}
+              title="聊天历史"
+            >
+              <ClockCounterClockwise size={16} weight="bold" />
+              历史
+            </button>
             <button
               type="button"
               onClick={() => setWebSearch((current) => !current)}
